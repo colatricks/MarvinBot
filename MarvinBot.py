@@ -46,7 +46,7 @@ separator = '->'
 dbname = "marvin"
 db = sqlite3.connect(dbname+".db", check_same_thread=False)
 cursor = db.cursor()
-cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word'	TEXT NOT NULL UNIQUE, 'trigger_response' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL, PRIMARY KEY('trigger_word'))")
+cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT NULL, 'trigger_response' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL)")
 
 
 # Define a few command handlers. These usually take the two arguments update and
