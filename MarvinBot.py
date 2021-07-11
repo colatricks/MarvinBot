@@ -64,7 +64,7 @@ def help_command(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /help is issued."""
     update.message.reply_text('Help!')
 
-def add_command(update: Update, context: CallbackContext) -> None:
+def add_trigger_command(update: Update, context: CallbackContext) -> None:
     """Adds a new trigger when the /add command is used"""
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
@@ -98,6 +98,24 @@ def add_command(update: Update, context: CallbackContext) -> None:
         cursor.execute("INSERT INTO triggers (trigger_word,trigger_response,chat_id) VALUES('" + trigger_word + "','" + trigger_response + "','" + chat_id + "')")
         db.commit()
         context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] created.")
+
+def del_trigger_command(update: Update, context: CallbackContext) -> None:
+    """Removes a trigger when the /del command is used"""
+    chat_id = str(update.message.chat_id)
+    chat_text = update.message.text
+
+    if(len(chat_text.split()) < 2):
+        context.bot.send_message(chat_id, text="Bad Arguments")
+        return
+    trigger_word = chat_text.split(' ', 1)[1].strip().lower()
+
+    lookup = trigger_lookup(trigger_word, chat_id)
+    if lookup[0] == 1: 
+        cursor.execute("DELETE FROM triggers WHERE trigger_word = '" + trigger_word + "' AND chat_id = '" + chat_id + "'")
+        db.commit()
+        context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] deleted.")
+    elif lookup[0] == 0:
+        context.bot.send_message(chat_id, text="Trigger not found.")
 
 def trigger_lookup(trigger_word, chat_id) -> None:
     select = cursor.execute("SELECT * from triggers WHERE trigger_word = '" + trigger_word + "' AND chat_id = '" + chat_id + "'")
@@ -142,17 +160,17 @@ def roll_command(update: Update, context: CallbackContext) -> None:
         context.bot.send_message(chat_id, text=random.choice(rollSass) + "\n\n" + str(rolled))
 
     elif(regexp.search(chat_text)):
-            dice = chat_text.split()
-            numbers = re.split("d",dice[1],flags=re.IGNORECASE)
-            low = 1
-            high = int(numbers[1])
-            totaldice = int(numbers[0])            
-            loop = 1
-            rolled=[]
-            while loop <= totaldice:                
-                loop = loop + 1
-                rolled.append(random.randint(low, high))
-            context.bot.send_message(chat_id, text=random.choice(rollSass) + "\n\n" + str(rolled))
+        dice = chat_text.split()
+        numbers = re.split("d",dice[1],flags=re.IGNORECASE)
+        low = 1
+        high = int(numbers[1])
+        totaldice = int(numbers[0])            
+        loop = 1
+        rolled=[]
+        while loop <= totaldice:                
+            loop = loop + 1
+            rolled.append(random.randint(low, high))
+        context.bot.send_message(chat_id, text=random.choice(rollSass) + "\n\n" + str(rolled))
 
     else:
         context.bot.send_message(chat_id, text="Stupid human. Of course you typed the wrong format. It's either '/roll' or '/roll XdY' where X is the number of dice, and Y is how many sides each dice has. For example, '/roll 2d6'")
@@ -170,7 +188,8 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CommandHandler("help", help_command))
     dispatcher.add_handler(CommandHandler("roll", roll_command))
-    dispatcher.add_handler(CommandHandler("add", add_command))
+    dispatcher.add_handler(CommandHandler("add", add_trigger_command))
+    dispatcher.add_handler(CommandHandler("del", del_trigger_command))
 
     # on non command i.e message - check if message is a match in the trigger_polling function
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, trigger_polling))
