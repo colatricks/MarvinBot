@@ -131,6 +131,42 @@ def trigger_lookup(trigger_word, chat_id) -> None:
         error = 'Something went wrong or trigger wasnt found'
         return 0, error
 
+def list_trigger_command(update: Update, context: CallbackContext) -> None:
+    """Removes a trigger when the /list command is used"""
+    chat_id = str(update.message.chat_id)
+
+    select = cursor.execute("SELECT * from triggers WHERE chat_id = '" + chat_id + "'")
+    rows = select.fetchall()
+    triggerList = []
+    if rows:
+        for row in rows:
+            triggerList.append(row[0])
+        
+        sentenceList = ", ".join(triggerList)
+        context.bot.send_message(chat_id, text="Trigger list:\n\n" + sentenceList)
+    else: 
+        error = 'Something went wrong or trigger wasnt found'
+        return 0, error
+
+def list_trigger_detail_command(update: Update, context: CallbackContext) -> None:
+    """Removes a trigger when the /list command is used"""
+    chat_id = str(update.message.chat_id)
+    user_id = str(update.message.from_user.id)
+
+    select = cursor.execute("SELECT * from triggers WHERE chat_id = '" + chat_id + "'")
+    rows = select.fetchall()
+    triggerList = []
+    if rows:
+        for row in rows:
+            triggerFull = "*" + row[0] + " : *" + row[1]
+            triggerList.append(triggerFull)
+        
+        sentenceList = "\n\n".join(triggerList)
+        context.bot.send_message(user_id, text="Full Detail Trigger List:\n\n" + sentenceList, parse_mode='markdown')
+    else: 
+        error = 'Something went wrong or trigger wasnt found'
+        return 0, error
+
 def trigger_polling(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
@@ -190,6 +226,8 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("roll", roll_command))
     dispatcher.add_handler(CommandHandler("add", add_trigger_command))
     dispatcher.add_handler(CommandHandler("del", del_trigger_command))
+    dispatcher.add_handler(CommandHandler("list", list_trigger_command))
+    dispatcher.add_handler(CommandHandler("listDetail", list_trigger_detail_command))
 
     # on non command i.e message - check if message is a match in the trigger_polling function
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, trigger_polling))
