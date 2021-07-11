@@ -5,12 +5,17 @@ Marvin is your groups resident manic depressive robot with personality!
 
 REQUIREMENTS:
 - Python 3.6+
+- SQLite3
+- Python-Telegram-Bot (https://github.com/python-telegram-bot/python-telegram-bot)
 
 USAGE:
-
 - pip install -r requirements.txt
 - Rename .env.example to .env - update with your Telegram Bot Token
 - Rename rollSass.json.example to rollSass.json - feel free to add your own snark/personality.
+
+FEATURES: 
+- Dice Roll (/roll or /roll XdY e.g /roll 2d8)
+- Triggers (/add trigger -> triggerResponse ... /del trigger)
 
 """
 
@@ -34,6 +39,15 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Separator character. Used for commands with a to/from type response
+separator = '->'
+
+# Open connection to the Database and define table names
+dbname = "marvin"
+db = sqlite3.connect(dbname+".db", check_same_thread=False)
+cursor = db.cursor()
+cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word'	TEXT NOT NULL UNIQUE, 'trigger_response' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL, PRIMARY KEY('trigger_word'))")
+
 
 # Define a few command handlers. These usually take the two arguments update and
 # context.
@@ -50,19 +64,72 @@ def help_command(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /help is issued."""
     update.message.reply_text('Help!')
 
-
-def echo(update: Update, context: CallbackContext) -> None:
-    """Echo the user message."""
-    chat_id = update.message.chat_id
-    context.bot.send_message(chat_id, text=update.message.text)
-    
-    # Original code, 
-    # update.message.reply_text(update.message.text)
-
 def add_command(update: Update, context: CallbackContext) -> None:
-    """Send a message when the command /help is issued."""
-    update.message.reply_text('Help!')
+    """Adds a new trigger when the /add command is used"""
+    chat_id = str(update.message.chat_id)
+    chat_text = update.message.text
 
+    # Validations.
+    if(len(chat_text.split()) < 2):
+        update.message.reply_text("Bad Arguments, create a trigger with: \n\n /add trigger " + separator + " trigger_response")
+        return
+    if(chat_text.find(separator, 1) == -1):
+        update.message.reply_text("Separator not found, create a trigger with: \n\n /add trigger " + separator + " trigger_response")
+        return
+    rest_text = chat_text.split(' ', 1)[1]
+    trigger_word = u'' + rest_text.split(separator)[0].strip().lower()
+    trigger_word.encode('utf-8')
+    trigger_response = u'' + rest_text.split(separator, 1)[1].strip()
+
+    if(len(trigger_response) < 1):
+        update.message.reply_text("Bad Arguments, create a trigger with: \n\n /add trigger " + separator + " trigger_response")
+        return
+    if(len(trigger_response) > 3000):
+        update.message.reply_text('Response too long. [chars > 3000]')
+        return
+    # Save trigger for the group
+
+    lookup = trigger_lookup(trigger_word, chat_id)
+    if lookup[0] == 1:
+        print('Trigger exists! Updating it with the new value.')
+        cursor.execute("UPDATE triggers SET trigger_response = '" + trigger_response + "' WHERE trigger_word = '" + trigger_word + "' AND chat_id = '" + chat_id + "'")
+        db.commit()
+    elif lookup[0] == 0:
+        print('Trigger doesn\'t exist! Saving trigger.')
+        cursor.execute("INSERT INTO triggers (trigger_word,trigger_response,chat_id) VALUES('" + trigger_word + "','" + trigger_response + "','" + chat_id + "')")
+        db.commit()
+
+    """if(m.chat.type in ['group', 'supergroup']):
+        if(get_triggers(m.chat.id)):
+            get_triggers(m.chat.id)[trigger_word] = trigger_response
+        else:
+            triggers[str(m.chat.id)] = {trigger_word: trigger_response}
+        msg = u'' + trigger_created_message.format(trigger_word)
+        #bot.reply_to(m, msg)
+        bot.send_message(m.chat.id, msg)
+        save_triggers()"""
+
+def trigger_lookup(trigger_word, chat_id) -> None:
+    select = cursor.execute("SELECT * from triggers WHERE trigger_word = '" + trigger_word + "' AND chat_id = '" + chat_id + "'")
+    rows = select.fetchall()
+    
+    if rows:
+        for row in rows:
+            if str(row[0]) == trigger_word and str(row[2]) == chat_id:
+                return 1,row[1]
+            else: 
+                return 0
+    else: 
+        error = 'Something went wrong or trigger wasnt found'
+        return 0, error
+
+def trigger_polling(update: Update, context: CallbackContext) -> None:
+    chat_id = str(update.message.chat_id)
+    chat_text = update.message.text
+
+    lookup = trigger_lookup(chat_text.lower(), chat_id)
+    if lookup[0] == 1:
+        context.bot.send_message(chat_id, text=lookup[1])
 
 # Roll functionality
 # User can either send a simple '/roll' command which will default to a single eight sided die or,
@@ -113,9 +180,10 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CommandHandler("help", help_command))
     dispatcher.add_handler(CommandHandler("roll", roll_command))
+    dispatcher.add_handler(CommandHandler("add", add_command))
 
-    # on non command i.e message - echo the message on Telegram
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, echo))
+    # on non command i.e message - check if message is a match in the trigger_polling function
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, trigger_polling))
 
     # Start the Bot
     updater.start_polling()
