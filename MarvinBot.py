@@ -16,6 +16,7 @@ USAGE:
 FEATURES: 
 - Dice Roll (/roll or /roll XdY e.g /roll 2d8)
 - Triggers (/add trigger -> triggerResponse ... /del trigger)
+- Activity tracker, check the last time users interacted with the group. (Passive feature, /activity to check the log)
 
 """
 
@@ -24,6 +25,8 @@ import sqlite3
 import random
 import re
 import json
+from datetime import timedelta
+from datetime import datetime
 from telegram import Update, ForceReply
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from decouple import config
@@ -47,7 +50,7 @@ dbname = "marvin"
 db = sqlite3.connect(dbname+".db", check_same_thread=False)
 cursor = db.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT NULL, 'trigger_response' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL)")
-
+cursor.execute("CREATE TABLE IF NOT EXISTS 'activity' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL)")
 
 # Define a few command handlers. These usually take the two arguments update and
 # context.
@@ -76,6 +79,7 @@ def add_trigger_command(update: Update, context: CallbackContext) -> None:
     if(chat_text.find(separator, 1) == -1):
         update.message.reply_text("Separator not found, create a trigger with: \n\n /add trigger " + separator + " trigger_response")
         return
+
     rest_text = chat_text.split(' ', 1)[1]
     trigger_word = u'' + rest_text.split(separator)[0].strip().lower()
     trigger_word.encode('utf-8')
@@ -158,7 +162,7 @@ def list_trigger_detail_command(update: Update, context: CallbackContext) -> Non
     triggerList = []
     if rows:
         for row in rows:
-            triggerFull = "*" + row[0] + " : *" + row[1]
+            triggerFull = "*" + row[0] + " : *\n" + row[1]
             triggerList.append(triggerFull)
         
         sentenceList = "\n\n".join(triggerList)
@@ -170,10 +174,35 @@ def list_trigger_detail_command(update: Update, context: CallbackContext) -> Non
 def trigger_polling(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
+    user_id = str(update.message.from_user.id)
+    time = datetime.now()
+    timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
     
+    # Lookup to check if text is a trigger - send trigger message to group.
     lookup = trigger_lookup(chat_text.lower(), chat_id)
     if lookup[0] == 1:
         context.bot.send_message(chat_id, text=lookup[1])
+
+    # Lookup to check if user is in activity DB, update the DB either way.
+    actLookup = activity_lookup(user_id, chat_id)
+    if actLookup[0] == 1: 
+        cursor.execute("UPDATE activity SET timestamp = '" + timestamp + "' WHERE user_id = '" + user_id + "' AND chat_id = '" + chat_id + "'")
+        db.commit()
+    elif actLookup[0] == 0:
+        cursor.execute("INSERT INTO activity (user_id,chat_id,timestamp) VALUES('" + user_id + "','" + chat_id + "','" + timestamp + "')")
+        db.commit()
+
+def activity_lookup(user_id, chat_id) -> None:
+    select = cursor.execute("SELECT * from activity WHERE user_id = '" + user_id + "' AND chat_id = '" + chat_id + "'")
+    rows = select.fetchall()
+    
+    if rows:
+        for row in rows:
+            if str(row[0]) == user_id and str(row[1]) == chat_id:
+                return 1,row[0]
+    else: 
+        error = 'Something went wrong or user activity entry was not found.'
+        return 0, error
 
 # Roll functionality
 # User can either send a simple '/roll' command which will default to a single eight sided die or,
