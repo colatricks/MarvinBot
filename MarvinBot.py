@@ -87,27 +87,17 @@ def add_command(update: Update, context: CallbackContext) -> None:
     if(len(trigger_response) > 3000):
         update.message.reply_text('Response too long. [chars > 3000]')
         return
-    # Save trigger for the group
 
+    # Save trigger for the group
     lookup = trigger_lookup(trigger_word, chat_id)
-    if lookup[0] == 1:
-        print('Trigger exists! Updating it with the new value.')
+    if lookup[0] == 1: 
         cursor.execute("UPDATE triggers SET trigger_response = '" + trigger_response + "' WHERE trigger_word = '" + trigger_word + "' AND chat_id = '" + chat_id + "'")
         db.commit()
+        context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] updated.")
     elif lookup[0] == 0:
-        print('Trigger doesn\'t exist! Saving trigger.')
         cursor.execute("INSERT INTO triggers (trigger_word,trigger_response,chat_id) VALUES('" + trigger_word + "','" + trigger_response + "','" + chat_id + "')")
         db.commit()
-
-    """if(m.chat.type in ['group', 'supergroup']):
-        if(get_triggers(m.chat.id)):
-            get_triggers(m.chat.id)[trigger_word] = trigger_response
-        else:
-            triggers[str(m.chat.id)] = {trigger_word: trigger_response}
-        msg = u'' + trigger_created_message.format(trigger_word)
-        #bot.reply_to(m, msg)
-        bot.send_message(m.chat.id, msg)
-        save_triggers()"""
+        context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] created.")
 
 def trigger_lookup(trigger_word, chat_id) -> None:
     select = cursor.execute("SELECT * from triggers WHERE trigger_word = '" + trigger_word + "' AND chat_id = '" + chat_id + "'")
@@ -126,7 +116,7 @@ def trigger_lookup(trigger_word, chat_id) -> None:
 def trigger_polling(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
-
+    
     lookup = trigger_lookup(chat_text.lower(), chat_id)
     if lookup[0] == 1:
         context.bot.send_message(chat_id, text=lookup[1])
