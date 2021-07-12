@@ -45,7 +45,7 @@ separator = '->'
 # Marvin has some personality stored in rollSass.json and Sass.json 
 # rollSass is used every time /roll is invoked, Sass is used based on the frequency below
 frequency_count = 0
-frequency_total = 2 # how many messages are sent before Marvin 'speaks'
+frequency_total = 200 # how many messages are sent before Marvin 'speaks'
 
 
 # END USER CONFIGURATION 
@@ -154,11 +154,11 @@ def add_trigger_command(update: Update, context: CallbackContext) -> None:
     # Save trigger for the group
     lookup = trigger_lookup(trigger_word, chat_id)
     if lookup[0] == 1: 
-        cursor.execute("UPDATE triggers SET trigger_response = '" + trigger_response + "' WHERE trigger_word = '" + trigger_word + "' AND chat_id = '" + chat_id + "'")
+        cursor.execute("UPDATE triggers SET trigger_response = ? WHERE trigger_word = ? AND chat_id = ?",(trigger_response, trigger_word, chat_id))
         db.commit()
         context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] updated.")
     elif lookup[0] == 0:
-        cursor.execute("INSERT INTO triggers (trigger_word,trigger_response,chat_id) VALUES('" + trigger_word + "','" + trigger_response + "','" + chat_id + "')")
+        cursor.execute("INSERT INTO triggers (trigger_word,trigger_response,chat_id) VALUES(?,?,?)",(trigger_word,trigger_response,chat_id))
         db.commit()
         context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] created.")
 
@@ -177,7 +177,7 @@ def del_trigger_command(update: Update, context: CallbackContext) -> None:
 
     lookup = trigger_lookup(trigger_word, chat_id)
     if lookup[0] == 1: 
-        cursor.execute("DELETE FROM triggers WHERE trigger_word = '" + trigger_word + "' AND chat_id = '" + chat_id + "'")
+        cursor.execute("DELETE FROM triggers WHERE trigger_word = ? AND chat_id = ?",(trigger_word,chat_id))
         db.commit()
         context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] deleted.")
     elif lookup[0] == 0:
@@ -187,7 +187,7 @@ def del_trigger_command(update: Update, context: CallbackContext) -> None:
 # 
 # 
 def trigger_lookup(trigger_word, chat_id) -> None:
-    select = cursor.execute("SELECT * from triggers WHERE trigger_word = '" + trigger_word + "' AND chat_id = '" + chat_id + "'")
+    select = cursor.execute("SELECT * from triggers WHERE trigger_word = ? AND chat_id = ?",(trigger_word,chat_id))
     rows = select.fetchall()
     
     if rows:
@@ -206,8 +206,7 @@ def trigger_lookup(trigger_word, chat_id) -> None:
 def list_trigger_command(update: Update, context: CallbackContext) -> None:
     """Removes a trigger when the /list command is used"""
     chat_id = str(update.message.chat_id)
-
-    select = cursor.execute("SELECT * from triggers WHERE chat_id = '" + chat_id + "'")
+    select = cursor.execute("SELECT * from triggers WHERE chat_id = ?",(chat_id,))
     rows = select.fetchall()
     triggerList = []
     if rows:
@@ -228,8 +227,7 @@ def list_trigger_detail_command(update: Update, context: CallbackContext) -> Non
     """Sends a message to the requester with the full detail of all triggers"""
     chat_id = str(update.message.chat_id)
     user_id = str(update.message.from_user.id)
-
-    select = cursor.execute("SELECT * from triggers WHERE chat_id = '" + chat_id + "'")
+    select = cursor.execute("SELECT * from triggers WHERE chat_id = ?",(chat_id,))
     rows = select.fetchall()
     triggerList = []
     if rows:
@@ -264,10 +262,10 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     # Lookup to check if user is in activity DB, update the DB either way.
     actLookup = activity_lookup(user_id, chat_id)
     if actLookup[0] == 1: 
-        cursor.execute("UPDATE activity SET timestamp = '" + timestamp + "', status = '" + user_status + "' WHERE user_id = '" + user_id + "' AND chat_id = '" + chat_id + "'")
+        cursor.execute("UPDATE activity SET timestamp = ?, status = ? WHERE user_id = ? AND chat_id = ?",(timestamp,user_status,user_id,chat_id))
         db.commit()
     elif actLookup[0] == 0:
-        cursor.execute("INSERT INTO activity (user_id,chat_id,timestamp,status) VALUES('" + user_id + "','" + chat_id + "','"+ timestamp +"','" + user_status + "')")
+        cursor.execute("INSERT INTO activity (user_id,chat_id,timestamp,status) VALUES(?,?,?,?)",user_id,chat_id,timestamp,user_status)
         db.commit()
     
     # Marvins Personality
@@ -291,7 +289,7 @@ def marvin_personality() -> None:
 # Checks if user has been logged to the DB previously
 # 
 def activity_lookup(user_id, chat_id) -> None:
-    select = cursor.execute("SELECT * from activity WHERE user_id = '" + user_id + "' AND chat_id = '" + chat_id + "'")
+    select = cursor.execute("SELECT * from activity WHERE user_id = ? AND chat_id = ?",(user_id,chat_id))
     rows = select.fetchall()
     
     if rows:
@@ -312,7 +310,7 @@ def activity_command(update: Update, context: CallbackContext) -> None:
     chat_text = update.message.text
     user_id = str(update.message.from_user.id)
 
-    select = cursor.execute("SELECT * from activity WHERE chat_id = '" + chat_id + "' AND status NOT IN ('kicked', 'left') ORDER BY timestamp DESC")
+    select = cursor.execute("SELECT * from activity WHERE chat_id = ? AND status NOT IN ('kicked', 'left') ORDER BY timestamp DESC",(chat_id,))
     rows = select.fetchall()
 
     activityList = []
@@ -321,7 +319,8 @@ def activity_command(update: Update, context: CallbackContext) -> None:
             user_detail = activity_status_check(row[0],row[1],context)
             if user_detail[0] == 0:
                 # User no longer part of group, update status appropriately
-                cursor.execute("UPDATE activity SET status = 'left' WHERE user_id = '" + str(row[0]) + "' AND chat_id = '" + chat_id + "'")
+                cursor.execute("UPDATE activity SET status = 'left' WHERE user_id = ? AND chat_id = ?",(str(row[0]),chat_id))
+                print('User Deleted not in group any longer')
                 db.commit()
             else: 
                 print(user_detail[0])
