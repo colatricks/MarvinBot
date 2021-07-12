@@ -265,7 +265,7 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
         cursor.execute("UPDATE activity SET timestamp = ?, status = ? WHERE user_id = ? AND chat_id = ?",(timestamp,user_status,user_id,chat_id))
         db.commit()
     elif actLookup[0] == 0:
-        cursor.execute("INSERT INTO activity (user_id,chat_id,timestamp,status) VALUES(?,?,?,?)",user_id,chat_id,timestamp,user_status)
+        cursor.execute("INSERT INTO activity (user_id,chat_id,timestamp,status) VALUES(?,?,?,?)",(user_id,chat_id,timestamp,user_status))
         db.commit()
     
     # Marvins Personality
