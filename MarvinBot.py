@@ -52,6 +52,49 @@ cursor = db.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT NULL, 'trigger_response' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'activity' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL)")
 
+# Make timestamps pretty again
+def pretty_date(time=False):
+    """
+    Get a datetime object or a int() Epoch timestamp and return a
+    pretty string like 'an hour ago', 'Yesterday', '3 months ago',
+    'just now', etc
+    """
+    now = datetime.now()
+    if type(time) is int:
+        diff = now - datetime.fromtimestamp(time)
+    elif isinstance(time,datetime):
+        diff = now - time
+    elif not time:
+        diff = now - now
+    second_diff = diff.seconds
+    day_diff = diff.days
+
+    if day_diff < 0:
+        return ''
+
+    if day_diff == 0:
+        if second_diff < 10:
+            return "just now"
+        if second_diff < 60:
+            return str(second_diff) + " seconds ago"
+        if second_diff < 120:
+            return "a minute ago"
+        if second_diff < 3600:
+            return str(second_diff // 60) + " minutes ago"
+        if second_diff < 7200:
+            return "an hour ago"
+        if second_diff < 86400:
+            return str(second_diff // 3600) + " hours ago"
+    if day_diff == 1:
+        return "Yesterday"
+    if day_diff < 7:
+        return str(day_diff) + " days ago"
+    if day_diff < 31:
+        return str(day_diff // 7) + " weeks ago"
+    if day_diff < 365:
+        return str(day_diff // 30) + " months ago"
+    return str(day_diff // 365) + " years ago"
+
 # Define a few command handlers. These usually take the two arguments update and
 # context.
 def start(update: Update, context: CallbackContext) -> None:
@@ -153,7 +196,7 @@ def list_trigger_command(update: Update, context: CallbackContext) -> None:
         return 0, error
 
 def list_trigger_detail_command(update: Update, context: CallbackContext) -> None:
-    """Removes a trigger when the /list command is used"""
+    """Sends a message to the requester with the full detail of all triggers"""
     chat_id = str(update.message.chat_id)
     user_id = str(update.message.from_user.id)
 
@@ -202,6 +245,34 @@ def activity_lookup(user_id, chat_id) -> None:
                 return 1,row[0]
     else: 
         error = 'Something went wrong or user activity entry was not found.'
+        return 0, error
+
+def activity_command(update: Update, context: CallbackContext) -> None:
+    """Pulls a list of users activity and sends to the group"""
+    chat_id = str(update.message.chat_id)
+    chat_text = update.message.text
+    user_id = str(update.message.from_user.id)
+
+    select = cursor.execute("SELECT * from activity WHERE chat_id = '" + chat_id + "' ORDER BY timestamp DESC")
+    rows = select.fetchall()
+
+    activityList = []
+    if rows:
+        for row in rows:
+            activity_user_id = str(row[0])
+            timestamp = row[2]
+            timestampObject = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+            print(" ")
+            print(timestampObject)
+            prettyDate = pretty_date(timestampObject)
+
+            activityFull = prettyDate + " : *" + activity_user_id +"*"
+            activityList.append(activityFull)
+        
+        sentenceList = "\n".join(activityList)
+        context.bot.send_message(chat_id, text="Activity List:\n\n" + sentenceList, parse_mode='markdown')
+    else: 
+        error = 'Something went wrong or activity wasnt found'
         return 0, error
 
 # Roll functionality
@@ -257,6 +328,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("del", del_trigger_command))
     dispatcher.add_handler(CommandHandler("list", list_trigger_command))
     dispatcher.add_handler(CommandHandler("listDetail", list_trigger_detail_command))
+    dispatcher.add_handler(CommandHandler("activity", activity_command))
 
     # on non command i.e message - check if message is a match in the trigger_polling function
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, trigger_polling))
