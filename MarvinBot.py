@@ -206,6 +206,7 @@ def list_trigger_command(update: Update, context: CallbackContext) -> None:
         context.bot.send_message(chat_id, text="Trigger list:\n\n" + sentenceList)
     else: 
         error = 'Something went wrong or trigger wasnt found'
+        context.bot.send_message(chat_id, text="Hmm, doesn't look like this group has any triggers yet!")
         return 0, error
 
 # /listDetail functionality 
@@ -228,6 +229,7 @@ def list_trigger_detail_command(update: Update, context: CallbackContext) -> Non
         context.bot.send_message(user_id, text="Full Detail Trigger List:\n\n" + sentenceList, parse_mode='markdown')
     else: 
         error = 'Something went wrong or trigger wasnt found'
+        context.bot.send_message(chat_id, text="Hmm, doesn't look like this group has any triggers yet!")
         return 0, error
 
 # Passive chat polling 
