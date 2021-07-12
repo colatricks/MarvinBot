@@ -1,7 +1,8 @@
 """
 Group Entertainment Bot written for Python 3
 
-Marvin is your groups resident manic depressive robot with personality! 
+Marvin is your groups resident Paranoid Android with personality! 
+Lovingly inspired by https://en.wikipedia.org/wiki/Marvin_the_Paranoid_Android 
 
 REQUIREMENTS:
 - Python 3.6+
@@ -11,7 +12,7 @@ REQUIREMENTS:
 USAGE:
 - pip install -r requirements.txt
 - Rename .env.example to .env - update with your Telegram Bot Token
-- Rename rollSass.json.example to rollSass.json - feel free to add your own snark/personality.
+- Rename rollSass.json.example to rollSass.json and Sass.json.example to Sass.json - feel free to add your own snark/personality.
 
 FEATURES: 
 - Dice Roll (/roll or /roll XdY e.g /roll 2d8)
@@ -31,9 +32,23 @@ from telegram import Update, ForceReply
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from decouple import config
 
+# USER CONFIGURATION
+
 # .env Variables
 # Place a .env file in the directory with 'TOKEN=<YOURTOKENHERE>' - alternatively replace TOKEN in the line below with your Bots token
 TOKEN = config('TOKEN')
+
+# Separator character. Used for commands with a to/from type response
+separator = '->'
+
+# Used for random element to Marvins Personality
+# Marvin has some personality stored in rollSass.json and Sass.json 
+# rollSass is used every time /roll is invoked, Sass is used based on the frequency below
+frequency_count = 0
+frequency_total = 2 # how many messages are sent before Marvin 'speaks'
+
+
+# END USER CONFIGURATION 
 
 # Enable logging
 logging.basicConfig(
@@ -41,9 +56,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-
-# Separator character. Used for commands with a to/from type response
-separator = '->'
 
 # Open connection to the Database and define table names
 dbname = "marvin"
@@ -257,6 +269,22 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     elif actLookup[0] == 0:
         cursor.execute("INSERT INTO activity (user_id,chat_id,timestamp,status) VALUES('" + user_id + "','" + chat_id + "','"+ timestamp +"','" + user_status + "')")
         db.commit()
+    
+    # Marvins Personality
+    global frequency_count
+    if frequency_count > frequency_total:
+        marvin_says = marvin_personality()
+        context.bot.send_message(chat_id, text=marvin_says)
+        frequency_count = 0
+    else:
+        frequency_count += 1
+
+def marvin_personality() -> None:
+    json_file = open("Sass.json")
+    Sass = json.load(json_file)
+    json_file.close()
+
+    return random.choice(Sass)
 
 
 # Activity Lookup function
