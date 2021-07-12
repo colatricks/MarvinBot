@@ -320,11 +320,8 @@ def activity_command(update: Update, context: CallbackContext) -> None:
             if user_detail[0] == 0:
                 # User no longer part of group, update status appropriately
                 cursor.execute("UPDATE activity SET status = 'left' WHERE user_id = ? AND chat_id = ?",(str(row[0]),chat_id))
-                print('User Deleted not in group any longer')
                 db.commit()
             else: 
-                print(user_detail[0])
-                print(user_detail[1])
                 user_first_name = str((user_detail[1]).user.first_name)
                 if (user_detail[1].user.last_name == None):
                     user_last_name = " "
