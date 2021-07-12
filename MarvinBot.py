@@ -50,7 +50,7 @@ dbname = "marvin"
 db = sqlite3.connect(dbname+".db", check_same_thread=False)
 cursor = db.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT NULL, 'trigger_response' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL)")
-cursor.execute("CREATE TABLE IF NOT EXISTS 'activity' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL)")
+cursor.execute("CREATE TABLE IF NOT EXISTS 'activity' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL, 'status' TEXT NOT NULL)")
 
 # Make timestamps pretty again
 def pretty_date(time=False):
@@ -110,6 +110,10 @@ def help_command(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /help is issued."""
     update.message.reply_text('Help!')
 
+
+# /add functionality 
+# Creates a new trigger, invoked with /add trigger_word <separator> trigger_response
+# 
 def add_trigger_command(update: Update, context: CallbackContext) -> None:
     """Adds a new trigger when the /add command is used"""
     chat_id = str(update.message.chat_id)
@@ -146,6 +150,9 @@ def add_trigger_command(update: Update, context: CallbackContext) -> None:
         db.commit()
         context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] created.")
 
+# /del functionality 
+# Removes any given trigger from a group. 
+# Invoked with /del <trigger_word>
 def del_trigger_command(update: Update, context: CallbackContext) -> None:
     """Removes a trigger when the /del command is used"""
     chat_id = str(update.message.chat_id)
@@ -164,6 +171,9 @@ def del_trigger_command(update: Update, context: CallbackContext) -> None:
     elif lookup[0] == 0:
         context.bot.send_message(chat_id, text="Trigger not found.")
 
+# Checks if a trigger exists, if yes, returns the value
+# 
+# 
 def trigger_lookup(trigger_word, chat_id) -> None:
     select = cursor.execute("SELECT * from triggers WHERE trigger_word = '" + trigger_word + "' AND chat_id = '" + chat_id + "'")
     rows = select.fetchall()
@@ -178,6 +188,9 @@ def trigger_lookup(trigger_word, chat_id) -> None:
         error = 'Something went wrong or trigger wasnt found'
         return 0, error
 
+# /list functionality 
+# Returns a simple list of all available triggers for a given group.
+# 
 def list_trigger_command(update: Update, context: CallbackContext) -> None:
     """Removes a trigger when the /list command is used"""
     chat_id = str(update.message.chat_id)
@@ -195,6 +208,9 @@ def list_trigger_command(update: Update, context: CallbackContext) -> None:
         error = 'Something went wrong or trigger wasnt found'
         return 0, error
 
+# /listDetail functionality 
+# Works similar to /list, however will also pull the trigger responses at the same time.
+# As this can be quite spammy, it sends the detail directly to the requestor rather than publishing in the group.
 def list_trigger_detail_command(update: Update, context: CallbackContext) -> None:
     """Sends a message to the requester with the full detail of all triggers"""
     chat_id = str(update.message.chat_id)
@@ -214,10 +230,15 @@ def list_trigger_detail_command(update: Update, context: CallbackContext) -> Non
         error = 'Something went wrong or trigger wasnt found'
         return 0, error
 
-def trigger_polling(update: Update, context: CallbackContext) -> None:
+# Passive chat polling 
+# Processes each message received in any groups where the Bot is active
+# Feeds into the Trigger and Activity functionality
+def chat_polling(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
     user_id = str(update.message.from_user.id)
+    user_status = (context.bot.get_chat_member(chat_id,user_id)).status
+
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
     
@@ -229,12 +250,16 @@ def trigger_polling(update: Update, context: CallbackContext) -> None:
     # Lookup to check if user is in activity DB, update the DB either way.
     actLookup = activity_lookup(user_id, chat_id)
     if actLookup[0] == 1: 
-        cursor.execute("UPDATE activity SET timestamp = '" + timestamp + "' WHERE user_id = '" + user_id + "' AND chat_id = '" + chat_id + "'")
+        cursor.execute("UPDATE activity SET timestamp = '" + timestamp + "', status = '" + user_status + "' WHERE user_id = '" + user_id + "' AND chat_id = '" + chat_id + "'")
         db.commit()
     elif actLookup[0] == 0:
-        cursor.execute("INSERT INTO activity (user_id,chat_id,timestamp) VALUES('" + user_id + "','" + chat_id + "','" + timestamp + "')")
+        cursor.execute("INSERT INTO activity (user_id,chat_id,timestamp,status) VALUES('" + user_id + "','" + chat_id + "','"+ timestamp +"','" + user_status + "')")
         db.commit()
 
+
+# Activity Lookup function
+# Checks if user has been logged to the DB previously
+# 
 def activity_lookup(user_id, chat_id) -> None:
     select = cursor.execute("SELECT * from activity WHERE user_id = '" + user_id + "' AND chat_id = '" + chat_id + "'")
     rows = select.fetchall()
@@ -247,11 +272,17 @@ def activity_lookup(user_id, chat_id) -> None:
         error = 'Something went wrong or user activity entry was not found.'
         return 0, error
 
+
+# /activity Command
+# Returns a sorted list of recent user activity
+# User can optionally ask to filter by users who have not been active in X number of days with '/activity X' 
 def activity_command(update: Update, context: CallbackContext) -> None:
     """Pulls a list of users activity and sends to the group"""
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
     user_id = str(update.message.from_user.id)
+    print('Status:')
+    print(update.chat_member)
 
     select = cursor.execute("SELECT * from activity WHERE chat_id = '" + chat_id + "' ORDER BY timestamp DESC")
     rows = select.fetchall()
@@ -259,11 +290,10 @@ def activity_command(update: Update, context: CallbackContext) -> None:
     activityList = []
     if rows:
         for row in rows:
+            print(row)
             activity_user_id = str(row[0])
             timestamp = row[2]
             timestampObject = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
-            print(" ")
-            print(timestampObject)
             prettyDate = pretty_date(timestampObject)
 
             activityFull = prettyDate + " : *" + activity_user_id +"*"
@@ -330,8 +360,8 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("listDetail", list_trigger_detail_command))
     dispatcher.add_handler(CommandHandler("activity", activity_command))
 
-    # on non command i.e message - check if message is a match in the trigger_polling function
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, trigger_polling))
+    # on non command i.e message - checks each message and runs it through our poller
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, chat_polling))
 
     # Start the Bot
     updater.start_polling()
