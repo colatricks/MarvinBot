@@ -283,29 +283,55 @@ def activity_command(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
     user_id = str(update.message.from_user.id)
-    print('Status:')
-    print(update.chat_member)
 
-    select = cursor.execute("SELECT * from activity WHERE chat_id = '" + chat_id + "' ORDER BY timestamp DESC")
+    select = cursor.execute("SELECT * from activity WHERE chat_id = '" + chat_id + "' AND status NOT IN ('kicked', 'left') ORDER BY timestamp DESC")
     rows = select.fetchall()
 
     activityList = []
     if rows:
         for row in rows:
-            print(row)
-            activity_user_id = str(row[0])
-            timestamp = row[2]
-            timestampObject = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
-            prettyDate = pretty_date(timestampObject)
+            user_detail = activity_status_check(row[0],row[1],context)
+            if user_detail[0] == 0:
+                # User no longer part of group, update status appropriately
+                cursor.execute("UPDATE activity SET status = 'left' WHERE user_id = '" + str(row[0]) + "' AND chat_id = '" + chat_id + "'")
+                db.commit()
+            else: 
+                print(user_detail[0])
+                print(user_detail[1])
+                user_first_name = str((user_detail[1]).user.first_name)
+                if (user_detail[1].user.last_name == None):
+                    user_last_name = " "
+                else: 
+                    user_last_name = str((user_detail[1]).user.last_name)
 
-            activityFull = prettyDate + " : *" + activity_user_id +"*"
-            activityList.append(activityFull)
+                timestamp = row[2]
+                timestampObject = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+                prettyDate = pretty_date(timestampObject)
+
+                activityFull = prettyDate + " : *" + user_first_name + user_last_name + "* " 
+                activityList.append(activityFull)
         
         sentenceList = "\n".join(activityList)
         context.bot.send_message(chat_id, text="Activity List:\n\n" + sentenceList, parse_mode='markdown')
     else: 
         error = 'Something went wrong or activity wasnt found'
         return 0, error
+
+# User Status Check
+# Checks if a user is an active member of the group.
+# 
+def activity_status_check(user_id,chat_id,context: CallbackContext) -> None:
+    try: 
+        user_detail = context.bot.get_chat_member(chat_id,user_id)
+        user_status = (user_detail).status
+
+        if user_status in ("member","creator","administrator"):
+            return user_status,user_detail
+        else: 
+            return 0,user_detail
+    except: 
+        user_detail = 'User not found.'
+        return 0, user_detail
 
 # Roll functionality
 # User can either send a simple '/roll' command which will default to a single eight sided die or,
