@@ -430,15 +430,17 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
                 user_last_name = str((user_detail[1]).user.last_name)
 
             if rows[4].lower() == "gryffindor":
-                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + "is a Gryffindor! 🦁", parse_mode='markdown')            
+                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " is a Gryffindor! 🦁", parse_mode='markdown')            
             elif rows[4].lower() == "slytherin":
-                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + "is a Slytherin! 🐍", parse_mode='markdown')  
+                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " is a Slytherin! 🐍", parse_mode='markdown')  
             elif rows[4].lower() == "hufflepuff":
-                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + "is a Hufflepuff! 🦡", parse_mode='markdown')  
+                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " is a Hufflepuff! 🦡", parse_mode='markdown')  
             elif rows[4].lower() == "ravenclaw":
-                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + "is a Ravenclaw! 🦅", parse_mode='markdown')  
+                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " is a Ravenclaw! 🦅", parse_mode='markdown')  
             elif rows[4].lower() == "houseelf":
-                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + "is a House Elf! 🧝‍♀️", parse_mode='markdown')  
+                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " is a House Elf! 🧝‍♀️", parse_mode='markdown')
+        else: 
+            context.bot.send_message(chat_id, text="Oops they don't have a house yet. Go to https://www.wizardingworld.com/news/discover-your-hogwarts-house-on-wizarding-world to find yours then do:\n\n /sortinghat <YourUsername> <YourHouse>'" is a House Elf! 🧝‍♀️", parse_mode='markdown')
     else:
         context.bot.send_message(chat_id, text="You dare use my spells against me? You did it wrong anyway. \n\n Sort someone into their house with:\n '/sortinghat @username <houseName>'\n\nHouse options are: Gryffindor, Slytherin, HufflePuff, Ravenclaw, HouseElf", parse_mode='markdown')
 
