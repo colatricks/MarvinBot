@@ -18,5 +18,6 @@ A Python 3 Telegram Bot for simple group tasks
 - Activity tracker, check the last time users interacted with the group. (Passive feature, /activity to check the log)
 
 **SCREENSHOTS**
+
 ![Screenshot1](https://github.com/suitedupgeek/MarvinBot/blob/main/docs/SS1.png)
 ![Screenshot1](https://github.com/suitedupgeek/MarvinBot/blob/main/docs/SS2.png)
