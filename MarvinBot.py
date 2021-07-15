@@ -19,7 +19,6 @@ FEATURES:
 - Triggers (/add trigger -> triggerResponse ... /del trigger)
 - Activity tracker, check the last time users interacted with the group. (Passive feature, /activity to check the log)
 - 'Personality' - Marvin can be configured to 'talk' at the group occassionally. How sassy he is, is up to you!
-- Harry Potter inspired
 
 """
 
@@ -64,7 +63,7 @@ dbname = "marvin"
 db = sqlite3.connect(dbname+".db", check_same_thread=False)
 cursor = db.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT NULL, 'trigger_response' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL)")
-cursor.execute("CREATE TABLE IF NOT EXISTS 'activity' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL, 'status' TEXT NOT NULL)")
+cursor.execute("CREATE TABLE IF NOT EXISTS 'users' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL, 'status' TEXT NOT NULL)")
 
 # Make timestamps pretty again
 def pretty_date(time=False):
@@ -266,10 +265,10 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     # Lookup to check if user is in activity DB, update the DB either way.
     actLookup = activity_lookup(user_id, chat_id)
     if actLookup[0] == 1: 
-        cursor.execute("UPDATE activity SET timestamp = ?, status = ? WHERE user_id = ? AND chat_id = ?",(timestamp,user_status,user_id,chat_id))
+        cursor.execute("UPDATE users SET timestamp = ?, status = ? WHERE user_id = ? AND chat_id = ?",(timestamp,user_status,user_id,chat_id))
         db.commit()
     elif actLookup[0] == 0:
-        cursor.execute("INSERT INTO activity (user_id,chat_id,timestamp,status) VALUES(?,?,?,?)",(user_id,chat_id,timestamp,user_status))
+        cursor.execute("INSERT INTO users (user_id,chat_id,timestamp,status) VALUES(?,?,?,?)",(user_id,chat_id,timestamp,user_status))
         db.commit()
     
     # Marvins Personality
@@ -293,7 +292,7 @@ def marvin_personality() -> None:
 # Checks if user has been logged to the DB previously
 # 
 def activity_lookup(user_id, chat_id) -> None:
-    select = cursor.execute("SELECT * from activity WHERE user_id = ? AND chat_id = ?",(user_id,chat_id))
+    select = cursor.execute("SELECT * from users WHERE user_id = ? AND chat_id = ?",(user_id,chat_id))
     rows = select.fetchall()
     
     if rows:
@@ -314,7 +313,7 @@ def activity_command(update: Update, context: CallbackContext) -> None:
     chat_text = update.message.text
     user_id = str(update.message.from_user.id)
 
-    select = cursor.execute("SELECT * from activity WHERE chat_id = ? AND status NOT IN ('kicked', 'left') ORDER BY timestamp DESC",(chat_id,))
+    select = cursor.execute("SELECT * from users WHERE chat_id = ? AND status NOT IN ('kicked', 'left') ORDER BY timestamp DESC",(chat_id,))
     rows = select.fetchall()
 
     activityList = []
@@ -323,7 +322,7 @@ def activity_command(update: Update, context: CallbackContext) -> None:
             user_detail = activity_status_check(row[0],row[1],context)
             if user_detail[0] == 0:
                 # User no longer part of group, update status appropriately
-                cursor.execute("UPDATE activity SET status = 'left' WHERE user_id = ? AND chat_id = ?",(str(row[0]),chat_id))
+                cursor.execute("UPDATE users SET status = 'left' WHERE user_id = ? AND chat_id = ?",(str(row[0]),chat_id))
                 db.commit()
             else: 
                 user_first_name = str((user_detail[1]).user.first_name)
