@@ -399,21 +399,20 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
         rows = select.fetchone()
         if rows:
             user_detail = activity_status_check(rows[0],rows[1],context)
-            print(user_detail)
             if command[2].capitalize() not in ['Gryffindor','Slytherin','Hufflepuff','Ravenclaw','Houseelf']:
                 context.bot.send_message(chat_id, text="Accio brain, perhaps?\n\nHouse options are: Gryffindor, Slytherin, HufflePuff, Ravenclaw, HouseElf", parse_mode='markdown')    
             else: 
                 cursor.execute("UPDATE users SET hp_house = ? WHERE username = ? AND chat_id = ?",(command[2].capitalize(),command[1][1:],chat_id))
                 if command[2].lower() == "gryffindor":
-                    context.bot.send_message(chat_id, text="Gryffindor", parse_mode='markdown')            
+                    context.bot.send_message(chat_id, text="🦁 Gryffindor! 🦁 \n\n Where dwell the brave at heart,\n Their daring, nerve, and chivalry,\nSet Gryffindors apart!", parse_mode='markdown')            
                 elif command[2].lower() == "slytherin":
-                    context.bot.send_message(chat_id, text="Slytherin", parse_mode='markdown')  
+                    context.bot.send_message(chat_id, text="🐍 Slytherin! 🐍 \n\n You'll make your real friends,\n Those cunning folks use any means,\n To achieve their ends!", parse_mode='markdown')  
                 elif command[2].lower() == "hufflepuff":
-                    context.bot.send_message(chat_id, text="Hufflepuff", parse_mode='markdown')  
+                    context.bot.send_message(chat_id, text="🦡 Hufflepuff! 🦡 \n\n Where they are just and loyal, \n Those patient HufflePuffs are true,\n And unafraid of toil!", parse_mode='markdown')  
                 elif command[2].lower() == "ravenclaw":
-                    context.bot.send_message(chat_id, text="Ravenclaw", parse_mode='markdown')  
+                    context.bot.send_message(chat_id, text="🦅 Ravenclaw! 🦅 \n\n If you've a ready mind, \n Where those of wit and learning,\n Will always find their kind!", parse_mode='markdown')  
                 elif command[2].lower() == "houseelf":
-                    context.bot.send_message(chat_id, text="Houseelf", parse_mode='markdown')  
+                    context.bot.send_message(chat_id, text="🧝‍♀️ House Elf 🧝‍♀️ \n\n A little unsure of their home,\n They get to clean up our dirty work.", parse_mode='markdown')  
                 db.commit()
         else:
             context.bot.send_message(chat_id, text="Did you Avada Kedavra someone?\n\nI didn't find that username in my database. Either they haven't spoken before or you typo'd it.", parse_mode='markdown')    
@@ -431,15 +430,15 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
                 user_last_name = str((user_detail[1]).user.last_name)
 
             if rows[4].lower() == "gryffindor":
-                context.bot.send_message(chat_id, text="Gryffindor", parse_mode='markdown')            
+                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + "is a Gryffindor! 🦁", parse_mode='markdown')            
             elif rows[4].lower() == "slytherin":
-                context.bot.send_message(chat_id, text="Slytherin", parse_mode='markdown')  
+                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + "is a Slytherin! 🐍", parse_mode='markdown')  
             elif rows[4].lower() == "hufflepuff":
-                context.bot.send_message(chat_id, text="Hufflepuff", parse_mode='markdown')  
+                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + "is a Hufflepuff! 🦡", parse_mode='markdown')  
             elif rows[4].lower() == "ravenclaw":
-                context.bot.send_message(chat_id, text="Ravenclaw", parse_mode='markdown')  
+                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + "is a Ravenclaw! 🦅", parse_mode='markdown')  
             elif rows[4].lower() == "houseelf":
-                context.bot.send_message(chat_id, text="Houseelf", parse_mode='markdown')  
+                context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + "is a House Elf! 🧝‍♀️", parse_mode='markdown')  
     else:
         context.bot.send_message(chat_id, text="You dare use my spells against me? You did it wrong anyway. \n\n Sort someone into their house with:\n '/sortinghat @username <houseName>'\n\nHouse options are: Gryffindor, Slytherin, HufflePuff, Ravenclaw, HouseElf", parse_mode='markdown')
 
