@@ -395,12 +395,12 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
     if len(update.message.text.split()) == 3:
         command = update.message.text.split()
-        select = cursor.execute("SELECT * FROM users WHERE username = ? AND chat_id = ?",(command[1][1:],chat_id))
+        select = cursor.execute("SELECT * FROM users WHERE username = ? AND chat_id = ? COLLATE NOCASE",(command[1][1:],chat_id))
         rows = select.fetchone()
         if rows:
             user_detail = activity_status_check(rows[0],rows[1],context)
             if command[2].capitalize() not in ['Gryffindor','Slytherin','Hufflepuff','Ravenclaw','Houseelf']:
-                context.bot.send_message(chat_id, text="Accio brain, perhaps?\n\nHouse options are: Gryffindor, Slytherin, HufflePuff, Ravenclaw, HouseElf", parse_mode='markdown')    
+                context.bot.send_message(chat_id, text="Accio brain, perhaps?\n\nHouse options are: Gryffindor, Slytherin, Hufflepuff, Ravenclaw, HouseElf", parse_mode='markdown')    
             else: 
                 cursor.execute("UPDATE users SET hp_house = ? WHERE username = ? AND chat_id = ?",(command[2].capitalize(),command[1][1:],chat_id))
                 if command[2].lower() == "gryffindor":
@@ -442,7 +442,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
         else: 
             context.bot.send_message(chat_id, text="Oops they don't have a house yet. Go to https://www.wizardingworld.com/news/discover-your-hogwarts-house-on-wizarding-world to find yours then do:\n\n /sortinghat <YourUsername> <YourHouse>'", parse_mode='markdown')
     else:
-        context.bot.send_message(chat_id, text="You dare use my spells against me? You did it wrong anyway. \n\n Sort someone into their house with:\n '/sortinghat @username <houseName>'\n\nHouse options are: Gryffindor, Slytherin, HufflePuff, Ravenclaw, HouseElf", parse_mode='markdown')
+        context.bot.send_message(chat_id, text="You dare use my spells against me? You did it wrong anyway. \n\n Sort someone into their house with:\n '/sortinghat @username <houseName>'\n\nHouse options are: Gryffindor, Slytherin, Hufflepuff, Ravenclaw, HouseElf", parse_mode='markdown')
 
 def hp_term_tracker(update: Update, context: CallbackContext, chat_id) -> None:
     chat_id = chat_id
