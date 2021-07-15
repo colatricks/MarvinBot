@@ -18,6 +18,8 @@ FEATURES:
 - Dice Roll (/roll or /roll XdY e.g /roll 2d8)
 - Triggers (/add trigger -> triggerResponse ... /del trigger)
 - Activity tracker, check the last time users interacted with the group. (Passive feature, /activity to check the log)
+- 'Personality' - Marvin can be configured to 'talk' at the group occassionally. How sassy he is, is up to you!
+- Harry Potter inspired
 
 """
 
@@ -45,7 +47,7 @@ separator = '->'
 # Marvin has some personality stored in rollSass.json and Sass.json 
 # rollSass is used every time /roll is invoked, Sass is used based on the frequency below
 frequency_count = 0
-frequency_total = 200 # how many messages are sent before Marvin 'speaks'
+frequency_total = 400 # how many messages are sent before Marvin 'speaks'
 
 
 # END USER CONFIGURATION 
@@ -246,6 +248,8 @@ def list_trigger_detail_command(update: Update, context: CallbackContext) -> Non
 # Processes each message received in any groups where the Bot is active
 # Feeds into the Trigger and Activity functionality
 def chat_polling(update: Update, context: CallbackContext) -> None:
+    print(update)
+    
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
     user_id = str(update.message.from_user.id)
