@@ -408,7 +408,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
                 elif command[2].lower() == "slytherin":
                     context.bot.send_message(chat_id, text="🐍 Slytherin! 🐍 \n\n You'll make your real friends,\n Those cunning folks use any means,\n To achieve their ends!", parse_mode='markdown')  
                 elif command[2].lower() == "hufflepuff":
-                    context.bot.send_message(chat_id, text="🦡 Hufflepuff! 🦡 \n\n Where they are just and loyal, \n Those patient HufflePuffs are true,\n And unafraid of toil!", parse_mode='markdown')  
+                    context.bot.send_message(chat_id, text="🦡 Hufflepuff! 🦡 \n\n Where they are just and loyal, \n Those patient Hufflepuffs are true,\n And unafraid of toil!", parse_mode='markdown')  
                 elif command[2].lower() == "ravenclaw":
                     context.bot.send_message(chat_id, text="🦅 Ravenclaw! 🦅 \n\n If you've a ready mind, \n Where those of wit and learning,\n Will always find their kind!", parse_mode='markdown')  
                 elif command[2].lower() == "houseelf":
