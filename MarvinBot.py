@@ -418,7 +418,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
             context.bot.send_message(chat_id, text="Did you Avada Kedavra someone?\n\nI didn't find that username in my database. Either they haven't spoken before or you typo'd it.", parse_mode='markdown')    
     elif len(update.message.text.split()) == 2:
         command = update.message.text.split()
-        select = cursor.execute("SELECT * FROM users WHERE username = ? AND chat_id = ?",(command[1][1:],chat_id))
+        select = cursor.execute("SELECT * FROM users WHERE username = ? COLLATE NOCASE AND chat_id = ?",(command[1][1:],chat_id))
         rows = select.fetchone()
         if rows:
             user_detail = activity_status_check(rows[0],rows[1],context)
