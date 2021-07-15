@@ -395,7 +395,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
     if len(update.message.text.split()) == 3:
         command = update.message.text.split()
-        select = cursor.execute("SELECT * FROM users WHERE username = ? AND chat_id = ? COLLATE NOCASE",(command[1][1:],chat_id))
+        select = cursor.execute("SELECT * FROM users WHERE username = ? COLLATE NOCASE AND chat_id = ?",(command[1][1:],chat_id))
         rows = select.fetchone()
         if rows:
             user_detail = activity_status_check(rows[0],rows[1],context)
