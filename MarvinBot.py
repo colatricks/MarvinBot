@@ -313,7 +313,15 @@ def activity_command(update: Update, context: CallbackContext) -> None:
     chat_text = update.message.text
     user_id = str(update.message.from_user.id)
 
-    select = cursor.execute("SELECT * from users WHERE chat_id = ? AND status NOT IN ('kicked', 'left') ORDER BY timestamp DESC",(chat_id,))
+    if len(chat_text) == 9: 
+        select = cursor.execute("SELECT * from users WHERE chat_id = ? AND status NOT IN ('kicked', 'left') AND timestamp < DateTime('Now', 'LocalTime', '-2 Day') ORDER BY timestamp DESC",(chat_id,))
+        activity_type = "Standard"
+    elif len(chat_text) == 14: 
+        select = cursor.execute("SELECT * from users WHERE chat_id = ? AND status NOT IN ('kicked', 'left') ORDER BY timestamp DESC",(chat_id,))
+        activity_type = "Full"
+    else: 
+        context.bot.send_message(chat_id, text="Hmm. That command wasn't quite right. It's either '/activity' or '/activity full'", parse_mode='markdown')
+
     rows = select.fetchall()
 
     activityList = []
@@ -337,11 +345,16 @@ def activity_command(update: Update, context: CallbackContext) -> None:
 
                 activityFull = prettyDate + " : *" + user_first_name + user_last_name + "* " 
                 activityList.append(activityFull)
-        
+
+            if activity_type == "Standard":
+                info_message = "To get the full chat activity list, use '/activity full'\n\n"
+            else: 
+                info_message = "To get the short chat activity list, use '/activity'\n\n"
         sentenceList = "\n".join(activityList)
-        context.bot.send_message(chat_id, text="Activity List:\n\n" + sentenceList, parse_mode='markdown')
+        context.bot.send_message(chat_id, text="Activity List:\n\n" + info_message + sentenceList, parse_mode='markdown')
     else: 
         error = 'Something went wrong or activity wasnt found'
+        context.bot.send_message(chat_id, text="It's a busy little group! Everybody has been active in the last 2 days. If you want the full chat list, use '/activity full'", parse_mode='markdown')
         return 0, error
 
 # User Status Check
