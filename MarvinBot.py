@@ -381,7 +381,9 @@ def activity_status_check(user_id,chat_id,context: CallbackContext) -> None:
 
         if user_status in ("member","creator","administrator"):
             return user_status,user_detail
-        else: 
+        else:
+            cursor.execute("UPDATE users SET status = 'left' WHERE user_id = ? AND chat_id = ?",(user_id,chat_id))
+            db.commit()
             return 0,user_detail
     except: 
         user_detail = 'User not found.'
