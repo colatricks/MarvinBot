@@ -20,6 +20,12 @@ FEATURES:
 - Activity tracker, check the last time users interacted with the group. (Passive feature, /activity to check the log)
 - 'Personality' - Marvin can be configured to 'talk' at the group occassionally. How sassy he is, is up to you!
 
+WISHLIST:
+- Create GIF based Triggers (probably something like '/add trigger_word -> <MAGIC-GIF-WORD>' and wait for user to send gif)
+
+IN PROGRESS: 
+- Harry Potter Game - details TBC
+
 """
 
 import logging
@@ -27,6 +33,7 @@ import sqlite3
 import random
 import re
 import json
+import uuid
 from datetime import timedelta
 from datetime import datetime
 from telegram import Update, ForceReply
@@ -38,6 +45,7 @@ from decouple import config
 # .env Variables
 # Place a .env file in the directory with 'TOKEN=<YOURTOKENHERE>' - alternatively replace TOKEN in the line below with your Bots token
 TOKEN = config('TOKEN')
+TERMLENGTH = config('TERMLENGTH')
 
 # Separator character. Used for commands with a to/from type response
 separator = '->'
@@ -63,7 +71,11 @@ dbname = "marvin"
 db = sqlite3.connect(dbname+".db", check_same_thread=False)
 cursor = db.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT NULL, 'trigger_response' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL)")
-cursor.execute("CREATE TABLE IF NOT EXISTS 'users' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL, 'status' TEXT NOT NULL)")
+cursor.execute("CREATE TABLE IF NOT EXISTS 'users' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL, 'status' TEXT NOT NULL, 'hp_house' TEXT, 'username' TEXT NOT NULL)")
+cursor.execute("CREATE TABLE IF NOT EXISTS 'hp' ('user_id' INTEGER, type TEXT NOT NULL, 'points' INT NOT NULL, 'timestamp' TEXT NOT NULL)")
+cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_points' ('user_id' INTEGER NOT NULL, chat_id INT NOT NULL, 'points' INT NOT NULL, 'timestamp' TEXT NOT NULL)")
+cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_terms' ('chat_id' INT NOT NULL, 'term_id' TEXT NOT NULL, 'start_date' TEXT NOT NULL, 'end_date' TEXT NOT NULL, 'is_current' INT NOT NULL)")
+
 
 # Make timestamps pretty again
 def pretty_date(time=False):
@@ -247,12 +259,12 @@ def list_trigger_detail_command(update: Update, context: CallbackContext) -> Non
 # Processes each message received in any groups where the Bot is active
 # Feeds into the Trigger and Activity functionality
 def chat_polling(update: Update, context: CallbackContext) -> None:
-    print(update)
     
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
     user_id = str(update.message.from_user.id)
     user_status = (context.bot.get_chat_member(chat_id,user_id)).status
+    username = context.bot.get_chat_member(chat_id,user_id).user.username
 
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
@@ -265,10 +277,10 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     # Lookup to check if user is in activity DB, update the DB either way.
     actLookup = activity_lookup(user_id, chat_id)
     if actLookup[0] == 1: 
-        cursor.execute("UPDATE users SET timestamp = ?, status = ? WHERE user_id = ? AND chat_id = ?",(timestamp,user_status,user_id,chat_id))
+        cursor.execute("UPDATE users SET timestamp = ?, status = ?, username = ? WHERE user_id = ? AND chat_id = ?",(timestamp,user_status,username,user_id,chat_id))
         db.commit()
     elif actLookup[0] == 0:
-        cursor.execute("INSERT INTO users (user_id,chat_id,timestamp,status) VALUES(?,?,?,?)",(user_id,chat_id,timestamp,user_status))
+        cursor.execute("INSERT INTO users (user_id,chat_id,timestamp,status,username) VALUES(?,?,?,?,?)",(user_id,chat_id,timestamp,user_status,username))
         db.commit()
     
     # Marvins Personality
@@ -279,6 +291,8 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
         frequency_count = 0
     else:
         frequency_count += 1
+
+    hp_term_tracker(Update, CallbackContext, chat_id)
 
 def marvin_personality() -> None:
     json_file = open("Sass.json")
@@ -373,6 +387,97 @@ def activity_status_check(user_id,chat_id,context: CallbackContext) -> None:
         user_detail = 'User not found.'
         return 0, user_detail
 
+# Harry Potter House Functionality
+# User can either send a simple '/roll' command which will default to a single eight sided die or,
+# User can send a '/roll XDY' command where X = number of dice, D is the separator, Y = sides on each die. 
+
+def hp_assign_house(update: Update, context: CallbackContext) -> None:
+    chat_id = str(update.message.chat_id)
+    if len(update.message.text.split()) == 3:
+        command = update.message.text.split()
+        select = cursor.execute("SELECT * FROM users WHERE username = ? AND chat_id = ?",(command[1][1:],chat_id))
+        rows = select.fetchone()
+        if rows:
+            user_detail = activity_status_check(rows[0],rows[1],context)
+            print(user_detail)
+            if command[2].capitalize() not in ['Gryffindor','Slytherin','Hufflepuff','Ravenclaw','Houseelf']:
+                context.bot.send_message(chat_id, text="Accio brain, perhaps?\n\nHouse options are: Gryffindor, Slytherin, HufflePuff, Ravenclaw, HouseElf", parse_mode='markdown')    
+            else: 
+                cursor.execute("UPDATE users SET hp_house = ? WHERE username = ? AND chat_id = ?",(command[2].capitalize(),command[1][1:],chat_id))
+                if command[2].lower() == "gryffindor":
+                    context.bot.send_message(chat_id, text="Gryffindor", parse_mode='markdown')            
+                elif command[2].lower() == "slytherin":
+                    context.bot.send_message(chat_id, text="Slytherin", parse_mode='markdown')  
+                elif command[2].lower() == "hufflepuff":
+                    context.bot.send_message(chat_id, text="Hufflepuff", parse_mode='markdown')  
+                elif command[2].lower() == "ravenclaw":
+                    context.bot.send_message(chat_id, text="Ravenclaw", parse_mode='markdown')  
+                elif command[2].lower() == "houseelf":
+                    context.bot.send_message(chat_id, text="Houseelf", parse_mode='markdown')  
+                db.commit()
+        else:
+            context.bot.send_message(chat_id, text="Did you Avada Kedavra someone?\n\nI didn't find that username in my database. Either they haven't spoken before or you typo'd it.", parse_mode='markdown')    
+    elif len(update.message.text.split()) == 2:
+        command = update.message.text.split()
+        select = cursor.execute("SELECT * FROM users WHERE username = ? AND chat_id = ?",(command[1][1:],chat_id))
+        rows = select.fetchone()
+        if rows:
+            user_detail = activity_status_check(rows[0],rows[1],context)
+            user_first_name = str((user_detail[1]).user.first_name)
+            hp_house = rows[4]
+            if (user_detail[1].user.last_name == None):
+                user_last_name = " "
+            else: 
+                user_last_name = str((user_detail[1]).user.last_name)
+
+            if rows[4].lower() == "gryffindor":
+                context.bot.send_message(chat_id, text="Gryffindor", parse_mode='markdown')            
+            elif rows[4].lower() == "slytherin":
+                context.bot.send_message(chat_id, text="Slytherin", parse_mode='markdown')  
+            elif rows[4].lower() == "hufflepuff":
+                context.bot.send_message(chat_id, text="Hufflepuff", parse_mode='markdown')  
+            elif rows[4].lower() == "ravenclaw":
+                context.bot.send_message(chat_id, text="Ravenclaw", parse_mode='markdown')  
+            elif rows[4].lower() == "houseelf":
+                context.bot.send_message(chat_id, text="Houseelf", parse_mode='markdown')  
+    else:
+        context.bot.send_message(chat_id, text="You dare use my spells against me? You did it wrong anyway. \n\n Sort someone into their house with:\n '/sortinghat @username <houseName>'\n\nHouse options are: Gryffindor, Slytherin, HufflePuff, Ravenclaw, HouseElf", parse_mode='markdown')
+
+def hp_term_tracker(update: Update, context: CallbackContext, chat_id) -> None:
+    chat_id = chat_id
+    time = datetime.now()
+    time_plus = time + timedelta(days=int(TERMLENGTH))
+    timestamp_now = str(time.strftime("%Y-%m-%d %H:%M:%S"))
+    timestamp_plus = str(time_plus.strftime("%Y-%m-%d %H:%M:%S"))
+
+    select = cursor.execute("SELECT * FROM hp_terms WHERE is_current = 1 AND chat_id = ?",(chat_id,))
+    rows = select.fetchone()
+    if rows:
+        print('Theres a current term')
+
+        # Is the term still current?
+        if timestamp_now < rows[3]:
+            print('Still in term time')
+        else:
+            print('not in term time anymore, starting new term')
+            # Pull back final totals
+            # Send results to group
+            # Update past winners?
+            # Close old term
+            cursor.execute("UPDATE hp_terms SET is_current = ? WHERE chat_id = ? AND term_id = ?",(0,chat_id, rows[1]))
+            # Start new term
+            cursor.execute("INSERT INTO hp_terms (chat_id, term_id, start_date, end_date, is_current) VALUES(?,?,?,?,1)",(chat_id,str(uuid.uuid4()),timestamp_now,timestamp_plus))
+            db.commit()
+
+        # If the term is no longer current, publish results and start a new term
+
+    else:
+        # First ever term!
+        cursor.execute("INSERT INTO hp_terms (chat_id, term_id, start_date, end_date, is_current) VALUES(?,?,?,?,1)",(chat_id,str(uuid.uuid4()),timestamp_now,timestamp_plus))
+        db.commit()
+
+        
+
 # Roll functionality
 # User can either send a simple '/roll' command which will default to a single eight sided die or,
 # User can send a '/roll XDY' command where X = number of dice, D is the separator, Y = sides on each die. 
@@ -427,6 +532,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("list", list_trigger_command))
     dispatcher.add_handler(CommandHandler("listDetail", list_trigger_detail_command))
     dispatcher.add_handler(CommandHandler("activity", activity_command))
+    dispatcher.add_handler(CommandHandler("sortinghat", hp_assign_house))
 
     # on non command i.e message - checks each message and runs it through our poller
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, chat_polling))
