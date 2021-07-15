@@ -425,7 +425,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
         if rows:
             user_detail = activity_status_check(rows[0],rows[1],context)
             user_first_name = str((user_detail[1]).user.first_name)
-            hp_house = rows[4]
+            
             if (user_detail[1].user.last_name == None):
                 user_last_name = ""
             else: 
@@ -459,23 +459,24 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
                 print(row)
                 user_detail = activity_status_check(row[0],row[1],context)
                 user_first_name = str((user_detail[1]).user.first_name)
-                if (user_detail[1].user.last_name == None):
-                    user_last_name = ""
-                else: 
-                    user_last_name = str(" " + (user_detail[1]).user.last_name)
+                if user_detail[1] == 1:
+                    if (user_detail[1].user.last_name == None):
+                        user_last_name = ""
+                    else: 
+                        user_last_name = str(" " + (user_detail[1]).user.last_name)
 
-                if row[4] == "Gryffindor":
-                    gryffindor.append(user_first_name + user_last_name)
-                elif row[4] == "Slytherin":
-                    slytherin.append(user_first_name + user_last_name)
-                elif row[4] == "Hufflepuff":
-                    hufflepuff.append(user_first_name + user_last_name)
-                elif row[4] == "Ravenclaw":
-                    ravenclaw.append(user_first_name + user_last_name)
-                elif row[4] == "Houseelf":
-                    houseelf.append(user_first_name + user_last_name)
-                else:
-                    muggles.append(user_first_name + user_last_name)
+                    if row[4] == "Gryffindor":
+                        gryffindor.append(user_first_name + user_last_name)
+                    elif row[4] == "Slytherin":
+                        slytherin.append(user_first_name + user_last_name)
+                    elif row[4] == "Hufflepuff":
+                        hufflepuff.append(user_first_name + user_last_name)
+                    elif row[4] == "Ravenclaw":
+                        ravenclaw.append(user_first_name + user_last_name)
+                    elif row[4] == "Houseelf":
+                        houseelf.append(user_first_name + user_last_name)
+                    else:
+                        muggles.append(user_first_name + user_last_name)
             
             sentenceGryffindor = ", ".join(gryffindor)
             sentenceSlytherin = ", ".join(slytherin)
