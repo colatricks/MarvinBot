@@ -459,7 +459,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
                 print(row)
                 user_detail = activity_status_check(row[0],row[1],context)
                 user_first_name = str((user_detail[1]).user.first_name)
-                if user_detail[1] == 1:
+                if user_detail[0] == 1:
                     if (user_detail[1].user.last_name == None):
                         user_last_name = ""
                     else: 
