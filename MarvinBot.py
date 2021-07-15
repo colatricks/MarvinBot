@@ -442,7 +442,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
         else: 
             context.bot.send_message(chat_id, text="Oops they don't have a house yet. Go to https://www.wizardingworld.com/news/discover-your-hogwarts-house-on-wizarding-world to find yours then do:\n\n /sortinghat <YourUsername> <YourHouse>'", parse_mode='markdown')
     elif len(update.message.text.split()) == 1:
-        select = cursor.execute("SELECT * FROM users WHERE chat_id = ?",(chat_id,))
+        select = cursor.execute("SELECT * FROM users WHERE chat_id = ? AND status NOT IN ('kicked', 'left')",(chat_id,))
         rows = select.fetchall()
 
         gryffindor = []
