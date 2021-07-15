@@ -430,7 +430,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
                 user_last_name = str(" " + (user_detail[1]).user.last_name)
 
             if rows[4].lower() == "gryffindor":
-                context.bot.send_message(chat_id, text=user_first_name +  user_last_name + " is a Gryffindor! 🦁", parse_mode='markdown')            
+                context.bot.send_message(chat_id, text=user_first_name + user_last_name + " is a Gryffindor! 🦁", parse_mode='markdown')            
             elif rows[4].lower() == "slytherin":
                 context.bot.send_message(chat_id, text=user_first_name + user_last_name + " is a Slytherin! 🐍", parse_mode='markdown')  
             elif rows[4].lower() == "hufflepuff":
@@ -441,6 +441,49 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
                 context.bot.send_message(chat_id, text=user_first_name + user_last_name + " is a House Elf! 🧝‍♀️", parse_mode='markdown')
         else: 
             context.bot.send_message(chat_id, text="Oops they don't have a house yet. Go to https://www.wizardingworld.com/news/discover-your-hogwarts-house-on-wizarding-world to find yours then do:\n\n /sortinghat <YourUsername> <YourHouse>'", parse_mode='markdown')
+    elif len(update.message.text.split()) == 1:
+        select = cursor.execute("SELECT * FROM users WHERE chat_id = ?",(chat_id,))
+        rows = select.fetchall()
+
+        gryffindor = []
+        ravenclaw = []
+        slytherin = []
+        hufflepuff = []
+        houseelf = []
+        muggles = []
+
+        if rows:
+            for row in rows:
+                print(row)
+                user_detail = activity_status_check(row[0],row[1],context)
+                user_first_name = str((user_detail[1]).user.first_name)
+                if (user_detail[1].user.last_name == None):
+                    user_last_name = ""
+                else: 
+                    user_last_name = str(" " + (user_detail[1]).user.last_name)
+
+                if row[4] == "Gryffindor":
+                    gryffindor.append(user_first_name + user_last_name)
+                elif row[4] == "Slytherin":
+                    slytherin.append(user_first_name + user_last_name)
+                elif row[4] == "Hufflepuff":
+                    hufflepuff.append(user_first_name + user_last_name)
+                elif row[4] == "Ravenclaw":
+                    ravenclaw.append(user_first_name + user_last_name)
+                elif row[4] == "Houseelf":
+                    houseelf.append(user_first_name + user_last_name)
+                else:
+                    muggles.append(user_first_name + user_last_name)
+            
+            sentenceGryffindor = ", ".join(gryffindor)
+            sentenceSlytherin = ", ".join(slytherin)
+            sentenceHufflepuff = ", ".join(hufflepuff)
+            sentenceRavenclaw = ", ".join(ravenclaw)
+            sentenceHouseelf = ", ".join(houseelf)
+            sentenceMuggles = ", ".join(muggles)
+
+            context.bot.send_message(chat_id, text="Hogwarts House Lists:\n\n 🦁 GRYFFINDOR 🦁\n" + sentenceGryffindor + "\n\n🦡 HUFFLEPUFF 🦡\n" + sentenceHufflepuff + "\n\n 🐍 SLYTHERIN 🐍\n" + sentenceSlytherin + "\n\n 🦅 RAVENCLAW 🦅\n" + sentenceRavenclaw + "\n\n 🧝‍♀️ HOUSE ELVES 🧝‍♀️\n" + sentenceHouseelf + "\n\n ❌ FILTHY MUGGLES ❌\n" + sentenceMuggles + "\n\nDon't want to be a filthy muggle? Take the test on the official Harry Potter website and then '/sortinghat @yourusername yourhousename' ")
+
     else:
         context.bot.send_message(chat_id, text="You dare use my spells against me? You did it wrong anyway. \n\n Sort someone into their house with:\n '/sortinghat @username <houseName>'\n\nHouse options are: Gryffindor, Slytherin, Hufflepuff, Ravenclaw, HouseElf", parse_mode='markdown')
 
