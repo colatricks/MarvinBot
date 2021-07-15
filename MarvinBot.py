@@ -405,6 +405,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
                 context.bot.send_message(chat_id, text="Accio brain, perhaps?\n\nHouse options are: Gryffindor, Slytherin, Hufflepuff, Ravenclaw, HouseElf", parse_mode='markdown')    
             else: 
                 cursor.execute("UPDATE users SET hp_house = ? WHERE username = ? AND chat_id = ?",(command[2].capitalize(),command[1][1:],chat_id))
+                db.commit()
                 if command[2].lower() == "gryffindor":
                     context.bot.send_message(chat_id, text="🦁 Gryffindor! 🦁 \n\n Where dwell the brave at heart,\n Their daring, nerve, and chivalry,\nSet Gryffindors apart!", parse_mode='markdown')            
                 elif command[2].lower() == "slytherin":
