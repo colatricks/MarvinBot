@@ -482,7 +482,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
             sentenceHouseelf = ", ".join(houseelf)
             sentenceMuggles = ", ".join(muggles)
 
-            context.bot.send_message(chat_id, text="Hogwarts House Lists:\n\n 🦁 GRYFFINDOR 🦁\n" + sentenceGryffindor + "\n\n🦡 HUFFLEPUFF 🦡\n" + sentenceHufflepuff + "\n\n 🐍 SLYTHERIN 🐍\n" + sentenceSlytherin + "\n\n 🦅 RAVENCLAW 🦅\n" + sentenceRavenclaw + "\n\n 🧝‍♀️ HOUSE ELVES 🧝‍♀️\n" + sentenceHouseelf + "\n\n ❌ FILTHY MUGGLES ❌\n" + sentenceMuggles + "\n\nDon't want to be a filthy muggle? Take the test on the official Harry Potter website and then '/sortinghat @yourusername yourhousename' ")
+            context.bot.send_message(chat_id, text="Hogwarts House Lists:\n\n 🦁 GRYFFINDOR 🦁\n" + sentenceGryffindor + "\n\n🦡 HUFFLEPUFF 🦡\n" + sentenceHufflepuff + "\n\n 🐍 SLYTHERIN 🐍\n" + sentenceSlytherin + "\n\n 🦅 RAVENCLAW 🦅\n" + sentenceRavenclaw + "\n\n 🧝‍♀️ HOUSE ELVES 🧝‍♀️\n" + sentenceHouseelf + "\n\n ❌ FILTHY MUGGLES ❌\n" + sentenceMuggles + "\n\nDon't want to be a filthy muggle? Take the test on the official Harry Potter website and then: \n\n'/sortinghat @yourusername yourhousename' ")
 
     else:
         context.bot.send_message(chat_id, text="You dare use my spells against me? You did it wrong anyway. \n\n Sort someone into their house with:\n '/sortinghat @username <houseName>'\n\nHouse options are: Gryffindor, Slytherin, Hufflepuff, Ravenclaw, HouseElf", parse_mode='markdown')
