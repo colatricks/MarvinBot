@@ -74,6 +74,7 @@ cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT N
 cursor.execute("CREATE TABLE IF NOT EXISTS 'users' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL, 'status' TEXT NOT NULL, 'hp_house' TEXT, 'username' TEXT NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_points' ('user_id' INTEGER NOT NULL, chat_id INT NOT NULL, 'points' INT NOT NULL, 'timestamp' TEXT NOT NULL, 'term_id' TEXT NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_terms' ('chat_id' INT NOT NULL, 'term_id' TEXT NOT NULL, 'start_date' TEXT NOT NULL, 'end_date' TEXT NOT NULL, 'is_current' INT NOT NULL)")
+cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL)")
 
 
 # Make timestamps pretty again
@@ -293,6 +294,8 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
 
     hp_term_tracker(chat_id)
     hp_points(update, context, chat_id, timestamp)
+    del_bot_message(chat_id, context)
+
 
 def marvin_personality() -> None:
     json_file = open("Sass.json")
@@ -457,10 +460,8 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
 
         if rows:
             for row in rows:
-                print(row)
                 user_detail = activity_status_check(row[0],row[1],context)
                 user_first_name = str((user_detail[1]).user.first_name)
-                print(user_detail)
                 if user_detail[0] != 0:
                     if (user_detail[1].user.last_name == None):
                         user_last_name = ""
@@ -502,8 +503,6 @@ def hp_term_tracker(chat_id) -> None:
     select = cursor.execute("SELECT * FROM hp_terms WHERE is_current = 1 AND chat_id = ?",(chat_id,))
     rows = select.fetchone()
     if rows:
-        print('Theres a current term')
-
         # Is the term still current?
         if timestamp_now < rows[3]:
             pass
@@ -584,7 +583,8 @@ def hp_points(update,context,chat_id,timestamp) -> None:
                     current_points = 1    
                     cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(to_user_id,chat_id,current_points,timestamp,term_id))
                     db.commit()
-                context.bot.send_message(chat_id, text=update.message.from_user.first_name + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.first_name + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points) )
+                messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.first_name + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.first_name + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points) )
+                log_bot_message(messageinfo.message_id,chat_id,timestamp)
             elif update.message.text in negative:
                 if rows:
                     current_points = rows[0]
@@ -595,21 +595,19 @@ def hp_points(update,context,chat_id,timestamp) -> None:
                     current_points = -1    
                     cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(to_user_id,chat_id,current_points,timestamp,term_id))
                     db.commit()
-                context.bot.send_message(chat_id, text=update.message.from_user.first_name + " of " + senderHouse + " has deducted " + update.message.reply_to_message.from_user.first_name + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points) )
+                messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.first_name + " of " + senderHouse + " has deducted " + update.message.reply_to_message.from_user.first_name + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points) )
+                log_bot_message(messageinfo.message_id,chat_id,timestamp)
 
 def hp_points_admin(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     chat_id = update.message.chat_id
-    print(chat_id)
     user_detail = activity_status_check(user_id,chat_id,context)
     user_status = user_detail[0]
-    print(user_detail[1])
 
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
 
     if user_status in ("creator","administrator"):
-        print("Yer an Admin 'arry ... ")
         # Get Current Term
         select = cursor.execute("SELECT * FROM hp_terms WHERE is_current = 1 AND chat_id = ?",(chat_id,))
         rows = select.fetchone()
@@ -620,14 +618,15 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
 
             # Stop admins being silly
             if int(command[2]) > 20:
-                context.bot.send_message(chat_id, text="Stupefy! Stop right there. The Ministry of Magic has mandated no more than 20 points can be awarded at a time!")
+                messageinfo = context.bot.send_message(chat_id, text="Stupefy! Stop right there. The Ministry of Magic has mandated no more than 20 points can be awarded at a time!")
+                log_bot_message(messageinfo.message_id,chat_id,timestamp)
             elif int(command[2]) < -20:
-                context.bot.send_message(chat_id, text="Stupefy! Stop right there. The Ministry of Magic has mandated no more than 20 points can be deducted at a time!")
+                messageinfo = context.bot.send_message(chat_id, text="Stupefy! Stop right there. The Ministry of Magic has mandated no more than 20 points can be deducted at a time!")
+                log_bot_message(messageinfo.message_id,chat_id,timestamp)
             else: 
 
                 select = cursor.execute("SELECT * FROM users WHERE username = ? COLLATE NOCASE AND chat_id = ?",(command[1][1:],chat_id))
                 rows = select.fetchone()
-                print(rows)
                 if rows:
                     user_detail = activity_status_check(rows[0],rows[1],context)
                     user_first_name = str((user_detail[1]).user.first_name)
@@ -663,28 +662,51 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
                         db.commit()
                     
                     if int(command[2]) > 0:
-                        context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " of " + receiverHouse + " has been awarded " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points) )
+                        messageinfo = context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " of " + receiverHouse + " has been awarded " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points) )
+                        log_bot_message(messageinfo.message_id,chat_id,timestamp)
                     elif int(command[2]) == 0:
-                        context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " of " + receiverHouse + " has been um ... awarded no extra House points.\nTheir new total for this Term is: " + str(current_points) )
+                        messageinfo = context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " of " + receiverHouse + " has been um ... awarded no extra House points.\nTheir new total for this Term is: " + str(current_points) )
+                        log_bot_message(messageinfo.message_id,chat_id,timestamp)
                     else:
-                        context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " of " + receiverHouse + " has been deducted " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points) )
+                        messageinfo = context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " of " + receiverHouse + " has been deducted " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points) )
+                        log_bot_message(messageinfo.message_id,chat_id,timestamp)
         elif len(update.message.text.split()) == 2:
             command = update.message.text.split()
             if command[1] == 'totals':
                 pass
                 #context.bot.send_message(chat_id, text="House points totals are: ")
             else:
-                context.bot.send_message(chat_id, text="Available commands are:\n\n'/points @username <pointsTotal>'")
+                messageinfo = context.bot.send_message(chat_id, text="Available commands are:\n\n'/points @username <pointsTotal>'")
+                log_bot_message(messageinfo.message_id,chat_id,timestamp)
         else: 
-            context.bot.send_message(chat_id, text="Available commands are:\n\n'/points @username <pointsTotal>'")
+            messageinfo = context.bot.send_message(chat_id, text="Available commands are:\n\n'/points @username <pointsTotal>'")
+            log_bot_message(messageinfo.message_id,chat_id,timestamp)
     else:
         user_first_name = str((user_detail[1]).user.first_name)
         if (user_detail[1].user.last_name == None):
             user_last_name = " "
         else: 
             user_last_name = str((user_detail[1]).user.last_name)
-        context.bot.send_message(chat_id, text="Yer not a Wizard Harry ... or ... an Admin ... " + user_first_name + " " + user_last_name)
+        messageinfo = context.bot.send_message(chat_id, text="Yer not a Wizard Harry ... or ... an Admin ... " + user_first_name + " " + user_last_name)
+        log_bot_message(messageinfo.message_id,chat_id,timestamp)
 
+def log_bot_message(message_id, chat_id, timestamp) -> None:
+    cursor.execute("INSERT INTO bot_service_messages (message_id, chat_id, created_date, status) VALUES(?,?,?,'sent')",(message_id, chat_id, timestamp))
+    db.commit()
+
+def del_bot_message(chat_id, context):
+    time = datetime.now()
+    select = cursor.execute("SELECT * FROM bot_service_messages WHERE chat_id = ?",(chat_id,))
+    rows = select.fetchall()
+    if rows:
+        for row in rows:
+            message_id = row[1]
+            created_date = datetime.strptime(row[2], '%Y-%m-%d %H:%M:%S')
+            target_date = created_date + timedelta(seconds=15)
+            if time > target_date:
+                context.bot.delete_message(chat_id,message_id)
+                cursor.execute("DELETE FROM bot_service_messages WHERE chat_id = ? AND message_id = ?",(chat_id,message_id))
+                db.commit()
 
 # Roll functionality
 # User can either send a simple '/roll' command which will default to a single eight sided die or,
