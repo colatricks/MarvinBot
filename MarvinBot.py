@@ -72,8 +72,7 @@ db = sqlite3.connect(dbname+".db", check_same_thread=False)
 cursor = db.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT NULL, 'trigger_response' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'users' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL, 'status' TEXT NOT NULL, 'hp_house' TEXT, 'username' TEXT NOT NULL)")
-cursor.execute("CREATE TABLE IF NOT EXISTS 'hp' ('user_id' INTEGER, type TEXT NOT NULL, 'points' INT NOT NULL, 'timestamp' TEXT NOT NULL)")
-cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_points' ('user_id' INTEGER NOT NULL, chat_id INT NOT NULL, 'points' INT NOT NULL, 'timestamp' TEXT NOT NULL)")
+cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_points' ('user_id' INTEGER NOT NULL, chat_id INT NOT NULL, 'points' INT NOT NULL, 'timestamp' TEXT NOT NULL, 'term_id' TEXT NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_terms' ('chat_id' INT NOT NULL, 'term_id' TEXT NOT NULL, 'start_date' TEXT NOT NULL, 'end_date' TEXT NOT NULL, 'is_current' INT NOT NULL)")
 
 
@@ -292,7 +291,8 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     else:
         frequency_count += 1
 
-    hp_term_tracker(Update, CallbackContext, chat_id)
+    hp_term_tracker(chat_id)
+    hp_points(update, context, chat_id, timestamp)
 
 def marvin_personality() -> None:
     json_file = open("Sass.json")
@@ -492,7 +492,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
     else:
         context.bot.send_message(chat_id, text="You dare use my spells against me? You did it wrong anyway. \n\n Sort someone into their house with:\n '/sortinghat @username <houseName>'\n\nHouse options are: Gryffindor, Slytherin, Hufflepuff, Ravenclaw, HouseElf", parse_mode='markdown')
 
-def hp_term_tracker(update: Update, context: CallbackContext, chat_id) -> None:
+def hp_term_tracker(chat_id) -> None:
     chat_id = chat_id
     time = datetime.now()
     time_plus = time + timedelta(days=int(TERMLENGTH))
@@ -506,9 +506,8 @@ def hp_term_tracker(update: Update, context: CallbackContext, chat_id) -> None:
 
         # Is the term still current?
         if timestamp_now < rows[3]:
-            print('Still in term time')
+            pass
         else:
-            print('not in term time anymore, starting new term')
             # Pull back final totals
             # Send results to group
             # Update past winners?
@@ -525,7 +524,167 @@ def hp_term_tracker(update: Update, context: CallbackContext, chat_id) -> None:
         cursor.execute("INSERT INTO hp_terms (chat_id, term_id, start_date, end_date, is_current) VALUES(?,?,?,?,1)",(chat_id,str(uuid.uuid4()),timestamp_now,timestamp_plus))
         db.commit()
 
+def hp_points(update,context,chat_id,timestamp) -> None:
+    # Get Current Term
+    select = cursor.execute("SELECT * FROM hp_terms WHERE is_current = 1 AND chat_id = ?",(chat_id,))
+    rows = select.fetchone()
+    term_id = rows[1]
+    positive = ["+","❤️","😍","👍"]
+    negative = ["-","😡","👎"]
+
+    # Check if message is a a reply
+    if update.message.reply_to_message:
+        if not update.message.reply_to_message.from_user.is_bot:
+            to_user_id = update.message.reply_to_message.from_user.id
+            from_user_id = update.message.from_user.id
         
+            # Get Current Points
+            select = cursor.execute("SELECT points FROM hp_points WHERE chat_id = ? AND term_id = ? and user_id = ?",(chat_id,term_id,to_user_id))
+            rows = select.fetchone()
+
+            # Get Sender & Target Users House
+            sender = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? and user_id = ?",(chat_id,from_user_id))
+            sender = sender.fetchone()
+            if sender[0] == "Gryffindor":
+                senderHouse = "🦁"
+            elif sender[0] == "Slytherin":
+                senderHouse = "🐍"
+            elif sender[0] == "Hufflepuff":
+                senderHouse = "🦡"
+            elif sender[0] == "Ravenclaw":
+                senderHouse = "🦅"
+            elif sender[0] == "Houseelf":
+                senderHouse = "🧝‍♀️"
+            else: 
+                senderHouse = "❌"
+
+            receiver = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? and user_id = ?",(chat_id,to_user_id))
+            receiver = receiver.fetchone()
+            if receiver[0] == "Gryffindor":
+                receiverHouse = "🦁"
+            elif receiver[0] == "Slytherin":
+                receiverHouse = "🐍"
+            elif receiver[0] == "Hufflepuff":
+                receiverHouse = "🦡"
+            elif receiver[0] == "Ravenclaw":
+                receiverHouse = "🦅"
+            elif receiver[0] == "Houseelf":
+                receiverHouse = "🧝‍♀️"
+            else: 
+                receiverHouse = "❌"
+
+            # Check if message was positive or not
+            if update.message.text in positive:
+                if rows:
+                    current_points = rows[0]
+                    current_points += 1
+                    cursor.execute("UPDATE hp_points SET points = ?, timestamp = ? WHERE user_id = ? AND chat_id = ? AND term_id = ?",(current_points,timestamp,to_user_id,chat_id,term_id))
+                    db.commit()
+                else: 
+                    current_points = 1    
+                    cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(to_user_id,chat_id,current_points,timestamp,term_id))
+                    db.commit()
+                context.bot.send_message(chat_id, text=update.message.from_user.first_name + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.first_name + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points) )
+            elif update.message.text in negative:
+                if rows:
+                    current_points = rows[0]
+                    current_points -= 1
+                    cursor.execute("UPDATE hp_points SET points = ?, timestamp = ? WHERE user_id = ? AND chat_id = ? AND term_id = ?",(current_points,timestamp,to_user_id,chat_id,term_id))
+                    db.commit()
+                else: 
+                    current_points = -1    
+                    cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(to_user_id,chat_id,current_points,timestamp,term_id))
+                    db.commit()
+                context.bot.send_message(chat_id, text=update.message.from_user.first_name + " of " + senderHouse + " has deducted " + update.message.reply_to_message.from_user.first_name + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points) )
+
+def hp_points_admin(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    chat_id = update.message.chat_id
+    print(chat_id)
+    user_detail = activity_status_check(user_id,chat_id,context)
+    user_status = user_detail[0]
+    print(user_detail[1])
+
+    time = datetime.now()
+    timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
+
+    if user_status in ("creator","administrator"):
+        print("Yer an Admin 'arry ... ")
+        # Get Current Term
+        select = cursor.execute("SELECT * FROM hp_terms WHERE is_current = 1 AND chat_id = ?",(chat_id,))
+        rows = select.fetchone()
+        term_id = rows[1]
+
+        if len(update.message.text.split()) == 3:
+            command = update.message.text.split()
+
+            # Stop admins being silly
+            if int(command[2]) > 20:
+                context.bot.send_message(chat_id, text="Stupefy! Stop right there. The Ministry of Magic has mandated no more than 20 points can be awarded at a time!")
+            elif int(command[2]) < -20:
+                context.bot.send_message(chat_id, text="Stupefy! Stop right there. The Ministry of Magic has mandated no more than 20 points can be deducted at a time!")
+            else: 
+
+                select = cursor.execute("SELECT * FROM users WHERE username = ? COLLATE NOCASE AND chat_id = ?",(command[1][1:],chat_id))
+                rows = select.fetchone()
+                print(rows)
+                if rows:
+                    user_detail = activity_status_check(rows[0],rows[1],context)
+                    user_first_name = str((user_detail[1]).user.first_name)
+                    if (user_detail[1].user.last_name == None):
+                        user_last_name = " "
+                    else: 
+                        user_last_name = str((user_detail[1]).user.last_name)
+
+                    if rows[4] == "Gryffindor":
+                        receiverHouse = "🦁"
+                    elif rows[4] == "Slytherin":
+                        receiverHouse = "🐍"
+                    elif rows[4] == "Hufflepuff":
+                        receiverHouse = "🦡"
+                    elif rows[4] == "Ravenclaw":
+                        receiverHouse = "🦅"
+                    elif rows[4] == "Houseelf":
+                        receiverHouse = "🧝‍♀️"
+                    else: 
+                        receiverHouse = "❌"
+
+                    # Get Current Points
+                    select = cursor.execute("SELECT points FROM hp_points WHERE chat_id = ? AND term_id = ? and user_id = ?",(chat_id,term_id,user_detail[1].user.id))
+                    rows = select.fetchone()
+                    if rows:
+                        current_points = rows[0]
+                        current_points = int(current_points) + int(command[2])
+                        cursor.execute("UPDATE hp_points SET points = ?, timestamp = ? WHERE user_id = ? AND chat_id = ? AND term_id = ?",(current_points,timestamp,user_detail[1].user.id,chat_id,term_id))
+                        db.commit()
+                    else: 
+                        current_points = command[2]    
+                        cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(user_detail[1].user.id,chat_id,current_points,timestamp,term_id))
+                        db.commit()
+                    
+                    if int(command[2]) > 0:
+                        context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " of " + receiverHouse + " has been awarded " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points) )
+                    elif int(command[2]) == 0:
+                        context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " of " + receiverHouse + " has been um ... awarded no extra House points.\nTheir new total for this Term is: " + str(current_points) )
+                    else:
+                        context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " of " + receiverHouse + " has been deducted " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points) )
+        elif len(update.message.text.split()) == 2:
+            command = update.message.text.split()
+            if command[1] == 'totals':
+                pass
+                #context.bot.send_message(chat_id, text="House points totals are: ")
+            else:
+                context.bot.send_message(chat_id, text="Available commands are:\n\n'/points @username <pointsTotal>'")
+        else: 
+            context.bot.send_message(chat_id, text="Available commands are:\n\n'/points @username <pointsTotal>'")
+    else:
+        user_first_name = str((user_detail[1]).user.first_name)
+        if (user_detail[1].user.last_name == None):
+            user_last_name = " "
+        else: 
+            user_last_name = str((user_detail[1]).user.last_name)
+        context.bot.send_message(chat_id, text="Yer not a Wizard Harry ... or ... an Admin ... " + user_first_name + " " + user_last_name)
+
 
 # Roll functionality
 # User can either send a simple '/roll' command which will default to a single eight sided die or,
@@ -582,6 +741,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("listDetail", list_trigger_detail_command))
     dispatcher.add_handler(CommandHandler("activity", activity_command))
     dispatcher.add_handler(CommandHandler("sortinghat", hp_assign_house))
+    dispatcher.add_handler(CommandHandler("points", hp_points_admin))
 
     # on non command i.e message - checks each message and runs it through our poller
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, chat_polling))
