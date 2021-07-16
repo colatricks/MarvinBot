@@ -407,15 +407,15 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
                 cursor.execute("UPDATE users SET hp_house = ? WHERE username = ? AND chat_id = ?",(command[2].capitalize(),command[1][1:],chat_id))
                 db.commit()
                 if command[2].lower() == "gryffindor":
-                    context.bot.send_message(chat_id, text="🦁 Gryffindor! 🦁 \n\n Where dwell the brave at heart,\n Their daring, nerve, and chivalry,\nSet Gryffindors apart!", parse_mode='markdown')            
+                    context.bot.send_message(chat_id, text="🦁 Gryffindor! 🦁 \n\nWhere dwell the brave at heart,\nTheir daring, nerve, and chivalry,\nSet Gryffindors apart!", parse_mode='markdown')            
                 elif command[2].lower() == "slytherin":
-                    context.bot.send_message(chat_id, text="🐍 Slytherin! 🐍 \n\n You'll make your real friends,\n Those cunning folks use any means,\n To achieve their ends!", parse_mode='markdown')  
+                    context.bot.send_message(chat_id, text="🐍 Slytherin! 🐍 \n\nYou'll make your real friends,\nThose cunning folks use any means,\nTo achieve their ends!", parse_mode='markdown')  
                 elif command[2].lower() == "hufflepuff":
-                    context.bot.send_message(chat_id, text="🦡 Hufflepuff! 🦡 \n\n Where they are just and loyal, \n Those patient Hufflepuffs are true,\n And unafraid of toil!", parse_mode='markdown')  
+                    context.bot.send_message(chat_id, text="🦡 Hufflepuff! 🦡 \n\nWhere they are just and loyal, \nThose patient Hufflepuffs are true,\nAnd unafraid of toil!", parse_mode='markdown')  
                 elif command[2].lower() == "ravenclaw":
-                    context.bot.send_message(chat_id, text="🦅 Ravenclaw! 🦅 \n\n If you've a ready mind, \n Where those of wit and learning,\n Will always find their kind!", parse_mode='markdown')  
+                    context.bot.send_message(chat_id, text="🦅 Ravenclaw! 🦅 \n\nIf you've a ready mind, \nWhere those of wit and learning,\nWill always find their kind!", parse_mode='markdown')  
                 elif command[2].lower() == "houseelf":
-                    context.bot.send_message(chat_id, text="🧝‍♀️ House Elf 🧝‍♀️ \n\n A little unsure of their home,\n They get to clean up our dirty work.", parse_mode='markdown')  
+                    context.bot.send_message(chat_id, text="🧝‍♀️ House Elf 🧝‍♀️ \n\nA little unsure of their home,\nThey get to clean up our dirty work.", parse_mode='markdown')  
                 db.commit()
         else:
             context.bot.send_message(chat_id, text="Did you Avada Kedavra someone?\n\nI didn't find that username in my database. Either they haven't spoken before or you typo'd it.", parse_mode='markdown')    
@@ -487,7 +487,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
             sentenceHouseelf = ", ".join(houseelf)
             sentenceMuggles = ", ".join(muggles)
 
-            context.bot.send_message(chat_id, text="Hogwarts House Lists:\n\n 🦁 GRYFFINDOR 🦁\n" + sentenceGryffindor + "\n\n🦡 HUFFLEPUFF 🦡\n" + sentenceHufflepuff + "\n\n 🐍 SLYTHERIN 🐍\n" + sentenceSlytherin + "\n\n 🦅 RAVENCLAW 🦅\n" + sentenceRavenclaw + "\n\n 🧝‍♀️ HOUSE ELVES 🧝‍♀️\n" + sentenceHouseelf + "\n\n ❌ FILTHY MUGGLES ❌\n" + sentenceMuggles + "\n\nDon't want to be a filthy muggle? Take the test on the official Harry Potter website and then: \n\n'/sortinghat @yourusername yourhousename' ")
+            context.bot.send_message(chat_id, text="Hogwarts House Lists:\n\n🦁 GRYFFINDOR 🦁\n" + sentenceGryffindor + "\n\n🦡 HUFFLEPUFF 🦡\n" + sentenceHufflepuff + "\n\n🐍 SLYTHERIN 🐍\n" + sentenceSlytherin + "\n\n🦅 RAVENCLAW 🦅\n" + sentenceRavenclaw + "\n\n🧝‍♀️ HOUSE ELVES 🧝‍♀️\n" + sentenceHouseelf + "\n\n❌ FILTHY MUGGLES ❌\n" + sentenceMuggles + "\n\nDon't want to be a filthy muggle? Take the test on the official Harry Potter website and then: \n\n'/sortinghat @yourusername yourhousename' ")
 
     else:
         context.bot.send_message(chat_id, text="You dare use my spells against me? You did it wrong anyway. \n\n Sort someone into their house with:\n '/sortinghat @username <houseName>'\n\nHouse options are: Gryffindor, Slytherin, Hufflepuff, Ravenclaw, HouseElf", parse_mode='markdown')
