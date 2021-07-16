@@ -46,6 +46,7 @@ from decouple import config
 # Place a .env file in the directory with 'TOKEN=<YOURTOKENHERE>' - alternatively replace TOKEN in the line below with your Bots token
 TOKEN = config('TOKEN')
 TERMLENGTH = config('TERMLENGTH')
+SERVICEMESSAGEDELETE = config('SERVICEMESSAGEDELETE')
 
 # Separator character. Used for commands with a to/from type response
 separator = '->'
@@ -702,7 +703,7 @@ def del_bot_message(chat_id, context):
         for row in rows:
             message_id = row[1]
             created_date = datetime.strptime(row[2], '%Y-%m-%d %H:%M:%S')
-            target_date = created_date + timedelta(seconds=15)
+            target_date = created_date + timedelta(seconds=int(SERVICEMESSAGEDELETE))
             if time > target_date:
                 context.bot.delete_message(chat_id,message_id)
                 cursor.execute("DELETE FROM bot_service_messages WHERE chat_id = ? AND message_id = ?",(chat_id,message_id))
