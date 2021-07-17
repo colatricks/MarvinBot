@@ -36,7 +36,7 @@ import json
 import uuid
 from datetime import timedelta
 from datetime import datetime
-from telegram import Update, ForceReply
+from telegram import Update, ForceReply, ParseMode
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from decouple import config
 
@@ -134,7 +134,57 @@ def start(update: Update, context: CallbackContext) -> None:
 
 def help_command(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /help is issued."""
-    update.message.reply_text('Help!')
+    chat_id = str(update.message.chat_id)
+    context.bot.send_message(chat_id, text="""*Don't Panic\! I have a Towel\!*
+
+*__Triggers__*
+*Add a new trigger:*        
+/add triggerWord \-\> triggerResponse
+
+*Delete a trigger:*             
+/del triggerWord
+
+*List triggers:*              
+/list 
+_or_
+/listDetail
+_The latter will PM you a full list of all triggers and their responses\. Note you must PM Marvin first and send a /start command to him\._
+
+*__Harry Potter__*
+*Add someone to their HP House:*
+/sortinghat @username \<houseName\>
+
+*List House Members:*
+/sortinghat
+_or_
+/sortinghat @username
+_The latter will return a single user, the former returns All users_
+
+*Give/Remove House Point:*
+Positive \= \+, ❤️, 😍, 👍
+Negative \= \-, 😡, 👎
+
+*Bulk Give/Remove House Point \(Admin Only\):*
+/points @username \<pointsTotal\>
+
+*__Roll Dice__*
+*Standard Roll*
+/roll
+
+*Custom Roll*
+/roll 2d8
+_The number 2 represents how many dice to roll, the number 8 represents how many sides each dice has\._
+
+*__Group General__*
+*Activity*
+/activity 
+_Shows users not active in the last two days_
+
+/activity full
+_Shows all users last activity_
+
+    
+    """, parse_mode=ParseMode.MARKDOWN_V2)
 
 
 # /add functionality 
