@@ -423,7 +423,7 @@ def activity_command(update: Update, context: CallbackContext) -> None:
                 timestampObject = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
                 prettyDate = pretty_date(timestampObject)
 
-                activityFull = prettyDate + " : *" + user.mention_markdown() + "* " 
+                activityFull = prettyDate + " : *" + user_detail[1].user.mention_markdown_v2() + "* " 
                 activityList.append(activityFull)
 
             if activity_type == "Standard":
@@ -431,7 +431,7 @@ def activity_command(update: Update, context: CallbackContext) -> None:
             else: 
                 info_message = "To get the short chat activity list, use '/activity'\n\n"
         sentenceList = "\n".join(activityList)
-        context.bot.send_message(chat_id, text="Activity List:\n\n" + info_message + sentenceList, parse_mode='markdown')
+        context.bot.send_message(chat_id, text="Activity List:\n\n" + info_message + sentenceList, parse_mode=ParseMode.MARKDOWN_V2)
     else: 
         error = 'Something went wrong or activity wasnt found'
         context.bot.send_message(chat_id, text="It's a busy little group! Everybody has been active in the last 2 days. If you want the full chat list, use '/activity full'", parse_mode='markdown')
