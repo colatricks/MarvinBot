@@ -125,21 +125,13 @@ def pretty_date(time=False):
 # context.
 def start(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /start is issued."""
-    user = update.effective_user
-    update.message.reply_markdown_v2(
-        fr'Hi {user.mention_markdown_v2()}\!',
-        reply_markup=ForceReply(selective=True),
-    )
 
-
-def help_command(update: Update, context: CallbackContext) -> None:
-    """Send a message when the command /help is issued."""
     chat_id = str(update.message.chat_id)
-    context.bot.send_message(chat_id, text="""*Don't Panic\! I have a Towel\!*
+    context.bot.send_message(chat_id, text="""*Don't Panic! I have a Towel!*
 
 *__Triggers__*
 *Add a new trigger:*        
-/add triggerWord \-\> triggerResponse
+/add triggerWord -> triggerResponse
 
 *Delete a trigger:*             
 /del triggerWord
@@ -148,11 +140,11 @@ def help_command(update: Update, context: CallbackContext) -> None:
 /list 
 _or_
 /listDetail
-_The latter will PM you a full list of all triggers and their responses\. Note you must PM Marvin first and send a /start command to him\._
+_The latter will PM you a full list of all triggers and their responses. Note you must PM Marvin first and send a /start command to him._
 
 *__Harry Potter__*
 *Add someone to their HP House:*
-/sortinghat @username \<houseName\>
+/sortinghat @username <houseName>
 
 *List House Members:*
 /sortinghat
@@ -161,11 +153,11 @@ _or_
 _The latter will return a single user, the former returns All users_
 
 *Give/Remove House Point:*
-Positive \= \+, ❤️, 😍, 👍
-Negative \= \-, 😡, 👎
+Positive = +, ❤️, 😍, 👍
+Negative = -, 😡, 👎
 
-*Bulk Give/Remove House Point \(Admin Only\):*
-/points @username \<pointsTotal\>
+*Bulk Give/Remove House Point (Admin Only):*
+/points @username <pointsTotal>
 
 *__Roll Dice__*
 *Standard Roll*
@@ -173,7 +165,7 @@ Negative \= \-, 😡, 👎
 
 *Custom Roll*
 /roll 2d8
-_The number 2 represents how many dice to roll, the number 8 represents how many sides each dice has\._
+_The number 2 represents how many dice to roll, the number 8 represents how many sides each dice has._
 
 *__Group General__*
 *Activity*
@@ -184,7 +176,16 @@ _Shows users not active in the last two days_
 _Shows all users last activity_
 
     
-    """, parse_mode=ParseMode.MARKDOWN_V2)
+    """, parse_mode='markdown')
+
+def help_command(update: Update, context: CallbackContext) -> None:
+    """Send a message when the command /help is issued."""
+    user = update.effective_user
+    update.message.reply_markdown_v2(
+        fr'Hi {user.mention_markdown_v2()}\!',
+        reply_markup=ForceReply(selective=True),
+    )
+
 
 
 # /add functionality 
@@ -379,7 +380,7 @@ def activity_command(update: Update, context: CallbackContext) -> None:
     """Pulls a list of users activity and sends to the group"""
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
-    user_id = str(update.message.from_user.id)
+    user = update.effective_user
 
     if len(chat_text) == 9: 
         select = cursor.execute("SELECT * from users WHERE chat_id = ? AND status NOT IN ('kicked', 'left') AND timestamp < DateTime('Now', 'LocalTime', '-2 Day') ORDER BY timestamp DESC",(chat_id,))
@@ -401,17 +402,11 @@ def activity_command(update: Update, context: CallbackContext) -> None:
                 cursor.execute("UPDATE users SET status = 'left' WHERE user_id = ? AND chat_id = ?",(str(row[0]),chat_id))
                 db.commit()
             else: 
-                user_first_name = str((user_detail[1]).user.first_name)
-                if (user_detail[1].user.last_name == None):
-                    user_last_name = " "
-                else: 
-                    user_last_name = str((user_detail[1]).user.last_name)
-
                 timestamp = row[2]
                 timestampObject = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
                 prettyDate = pretty_date(timestampObject)
 
-                activityFull = prettyDate + " : *" + user_first_name + user_last_name + "* " 
+                activityFull = prettyDate + " : *" + user.mention_markdown() + "* " 
                 activityList.append(activityFull)
 
             if activity_type == "Standard":
@@ -449,8 +444,8 @@ def activity_status_check(user_id,chat_id,context: CallbackContext) -> None:
 
 def hp_assign_house(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
-    if len(update.message.text.split()) == 3:
-        command = update.message.text.split()
+    command = update.message.text.split()
+    if len(command) == 3:
         select = cursor.execute("SELECT * FROM users WHERE username = ? COLLATE NOCASE AND chat_id = ?",(command[1][1:],chat_id))
         rows = select.fetchone()
         if rows:
@@ -473,32 +468,24 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
                 db.commit()
         else:
             context.bot.send_message(chat_id, text="Did you Avada Kedavra someone?\n\nI didn't find that username in my database. Either they haven't spoken before or you typo'd it.", parse_mode='markdown')    
-    elif len(update.message.text.split()) == 2:
-        command = update.message.text.split()
+    elif len(command) == 2:
         select = cursor.execute("SELECT * FROM users WHERE username = ? COLLATE NOCASE AND chat_id = ?",(command[1][1:],chat_id))
         rows = select.fetchone()
         if rows:
             user_detail = activity_status_check(rows[0],rows[1],context)
-            user_first_name = str((user_detail[1]).user.first_name)
-            
-            if (user_detail[1].user.last_name == None):
-                user_last_name = ""
-            else: 
-                user_last_name = str(" " + (user_detail[1]).user.last_name)
-
             if rows[4].lower() == "gryffindor":
-                context.bot.send_message(chat_id, text=user_first_name + user_last_name + " is a Gryffindor! 🦁", parse_mode='markdown')            
+                context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " is a Gryffindor! 🦁", parse_mode='markdown')            
             elif rows[4].lower() == "slytherin":
-                context.bot.send_message(chat_id, text=user_first_name + user_last_name + " is a Slytherin! 🐍", parse_mode='markdown')  
+                context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " is a Slytherin! 🐍", parse_mode='markdown')  
             elif rows[4].lower() == "hufflepuff":
-                context.bot.send_message(chat_id, text=user_first_name + user_last_name + " is a Hufflepuff! 🦡", parse_mode='markdown')  
+                context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " is a Hufflepuff! 🦡", parse_mode='markdown')  
             elif rows[4].lower() == "ravenclaw":
-                context.bot.send_message(chat_id, text=user_first_name + user_last_name + " is a Ravenclaw! 🦅", parse_mode='markdown')  
+                context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " is a Ravenclaw! 🦅", parse_mode='markdown') 
             elif rows[4].lower() == "houseelf":
-                context.bot.send_message(chat_id, text=user_first_name + user_last_name + " is a House Elf! 🧝‍♀️", parse_mode='markdown')
+                context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " is a House Elf! 🧝‍♀️", parse_mode='markdown') 
         else: 
             context.bot.send_message(chat_id, text="Oops they don't have a house yet. Go to https://www.wizardingworld.com/news/discover-your-hogwarts-house-on-wizarding-world to find yours then do:\n\n /sortinghat <YourUsername> <YourHouse>'", parse_mode='markdown')
-    elif len(update.message.text.split()) == 1:
+    elif len(command) == 1:
         select = cursor.execute("SELECT * FROM users WHERE chat_id = ? AND status NOT IN ('kicked', 'left')",(chat_id,))
         rows = select.fetchall()
 
@@ -512,25 +499,19 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
         if rows:
             for row in rows:
                 user_detail = activity_status_check(row[0],row[1],context)
-                user_first_name = str((user_detail[1]).user.first_name)
                 if user_detail[0] != 0:
-                    if (user_detail[1].user.last_name == None):
-                        user_last_name = ""
-                    else: 
-                        user_last_name = str(" " + (user_detail[1]).user.last_name)
-
                     if row[4] == "Gryffindor":
-                        gryffindor.append(user_first_name + user_last_name)
+                        gryffindor.append(user_detail[1].user.mention_markdown())
                     elif row[4] == "Slytherin":
-                        slytherin.append(user_first_name + user_last_name)
+                        slytherin.append(user_detail[1].user.mention_markdown())
                     elif row[4] == "Hufflepuff":
-                        hufflepuff.append(user_first_name + user_last_name)
+                        hufflepuff.append(user_detail[1].user.mention_markdown())
                     elif row[4] == "Ravenclaw":
-                        ravenclaw.append(user_first_name + user_last_name)
+                        ravenclaw.append(user_detail[1].user.mention_markdown())
                     elif row[4] == "Houseelf":
-                        houseelf.append(user_first_name + user_last_name)
+                        houseelf.append(user_detail[1].user.mention_markdown())
                     else:
-                        muggles.append(user_first_name + user_last_name)
+                        muggles.append(user_detail[1].user.mention_markdown())
             
             sentenceGryffindor = ", ".join(gryffindor)
             sentenceSlytherin = ", ".join(slytherin)
@@ -539,10 +520,9 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
             sentenceHouseelf = ", ".join(houseelf)
             sentenceMuggles = ", ".join(muggles)
 
-            context.bot.send_message(chat_id, text="Hogwarts House Lists:\n\n🦁 GRYFFINDOR 🦁\n" + sentenceGryffindor + "\n\n🦡 HUFFLEPUFF 🦡\n" + sentenceHufflepuff + "\n\n🐍 SLYTHERIN 🐍\n" + sentenceSlytherin + "\n\n🦅 RAVENCLAW 🦅\n" + sentenceRavenclaw + "\n\n🧝‍♀️ HOUSE ELVES 🧝‍♀️\n" + sentenceHouseelf + "\n\n❌ FILTHY MUGGLES ❌\n" + sentenceMuggles + "\n\nDon't want to be a filthy muggle? Take the test on the official Harry Potter website and then: \n\n'/sortinghat @yourusername yourhousename' ")
-
+            context.bot.send_message(chat_id, text="🦁 GRYFFINDOR 🦁\n" + sentenceGryffindor + "\n\n🦡 HUFFLEPUFF 🦡\n" + sentenceHufflepuff + "\n\n🐍 SLYTHERIN 🐍\n" + sentenceSlytherin + "\n\n🦅 RAVENCLAW 🦅\n" + sentenceRavenclaw + "\n\n🧝‍♀️ HOUSE ELVES 🧝‍♀️\n" + sentenceHouseelf + "\n\n❌ FILTHY MUGGLES ❌\n" + sentenceMuggles + "\n\nDon't want to be a filthy muggle? Take the test on the official Harry Potter website and then: \n\n'/sortinghat @yourusername yourhousename' ", parse_mode='markdown')
     else:
-        context.bot.send_message(chat_id, text="You dare use my spells against me? You did it wrong anyway. \n\n Sort someone into their house with:\n '/sortinghat @username <houseName>'\n\nHouse options are: Gryffindor, Slytherin, Hufflepuff, Ravenclaw, HouseElf", parse_mode='markdown')
+        context.bot.send_message(chat_id, text="You dare use my spells against me? You did it wrong anyway\. \n\n Sort someone into their house with:\n '/sortinghat @username <houseName>'\n\nHouse options are:\n Gryffindor, Slytherin, Hufflepuff, Ravenclaw, HouseElf", parse_mode='markdown')
 
 def hp_term_tracker(chat_id) -> None:
     chat_id = chat_id
@@ -634,7 +614,7 @@ def hp_points(update,context,chat_id,timestamp) -> None:
                     current_points = 1    
                     cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(to_user_id,chat_id,current_points,timestamp,term_id))
                     db.commit()
-                messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.first_name + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.first_name + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points) )
+                messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown')
                 log_bot_message(messageinfo.message_id,chat_id,timestamp)
             elif update.message.text in negative:
                 if rows:
@@ -646,7 +626,7 @@ def hp_points(update,context,chat_id,timestamp) -> None:
                     current_points = -1    
                     cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(to_user_id,chat_id,current_points,timestamp,term_id))
                     db.commit()
-                messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.first_name + " of " + senderHouse + " has deducted " + update.message.reply_to_message.from_user.first_name + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points) )
+                messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has deducted " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown' )
                 log_bot_message(messageinfo.message_id,chat_id,timestamp)
 
 def hp_points_admin(update: Update, context: CallbackContext) -> None:
@@ -654,7 +634,6 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
     chat_id = update.message.chat_id
     user_detail = activity_status_check(user_id,chat_id,context)
     user_status = user_detail[0]
-
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
 
@@ -680,12 +659,6 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
                 rows = select.fetchone()
                 if rows:
                     user_detail = activity_status_check(rows[0],rows[1],context)
-                    user_first_name = str((user_detail[1]).user.first_name)
-                    if (user_detail[1].user.last_name == None):
-                        user_last_name = " "
-                    else: 
-                        user_last_name = str((user_detail[1]).user.last_name)
-
                     if rows[4] == "Gryffindor":
                         receiverHouse = "🦁"
                     elif rows[4] == "Slytherin":
@@ -713,13 +686,13 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
                         db.commit()
                     
                     if int(command[2]) > 0:
-                        messageinfo = context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " of " + receiverHouse + " has been awarded " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points) )
+                        messageinfo = context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " of " + receiverHouse + " has been awarded " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points),parse_mode='markdown' )
                         log_bot_message(messageinfo.message_id,chat_id,timestamp)
                     elif int(command[2]) == 0:
-                        messageinfo = context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " of " + receiverHouse + " has been um ... awarded no extra House points.\nTheir new total for this Term is: " + str(current_points) )
+                        messageinfo = context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " of " + receiverHouse + " has been um ... awarded no extra House points.\nTheir new total for this Term is: " + str(current_points),parse_mode='markdown' )
                         log_bot_message(messageinfo.message_id,chat_id,timestamp)
                     else:
-                        messageinfo = context.bot.send_message(chat_id, text=user_first_name + " " + user_last_name + " of " + receiverHouse + " has been deducted " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points) )
+                        messageinfo = context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " of " + receiverHouse + " has been deducted " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points),parse_mode='markdown' )
                         log_bot_message(messageinfo.message_id,chat_id,timestamp)
         elif len(update.message.text.split()) == 2:
             command = update.message.text.split()
@@ -733,12 +706,7 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
             messageinfo = context.bot.send_message(chat_id, text="Available commands are:\n\n'/points @username <pointsTotal>'")
             log_bot_message(messageinfo.message_id,chat_id,timestamp)
     else:
-        user_first_name = str((user_detail[1]).user.first_name)
-        if (user_detail[1].user.last_name == None):
-            user_last_name = " "
-        else: 
-            user_last_name = str((user_detail[1]).user.last_name)
-        messageinfo = context.bot.send_message(chat_id, text="Yer not a Wizard Harry ... or ... an Admin ... " + user_first_name + " " + user_last_name)
+        messageinfo = context.bot.send_message(chat_id, text="Yer not a Wizard Harry ... or ... an Admin ... " + user_detail[1].user.mention_markdown(), parse_mode='markdown')
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
 
 def log_bot_message(message_id, chat_id, timestamp) -> None:
