@@ -125,7 +125,6 @@ def pretty_date(time=False):
 # context.
 def start(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /start is issued."""
-
     chat_id = str(update.message.chat_id)
     context.bot.send_message(chat_id, text="""*Don't Panic! I have a Towel!*
 
@@ -180,13 +179,9 @@ _Shows all users last activity_
 
 def help_command(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /help is issued."""
-    user = update.effective_user
-    update.message.reply_markdown_v2(
-        fr'Hi {user.mention_markdown_v2()}\!',
-        reply_markup=ForceReply(selective=True),
-    )
-
-
+    chat_id = str(update.message.chat_id)
+    user_detail = activity_status_check(context.bot.id,chat_id,context)
+    context.bot.send_message(chat_id, text="To get help, PM me  @" + user_detail[1].user.mention_markdown() + " and send me the Start or /start command", parse_mode='markdown')
 
 # /add functionality 
 # Creates a new trigger, invoked with /add trigger_word <separator> trigger_response
