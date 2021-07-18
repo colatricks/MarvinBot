@@ -46,7 +46,12 @@ from decouple import config
 # Place a .env file in the directory with 'TOKEN=<YOURTOKENHERE>' - alternatively replace TOKEN in the line below with your Bots token
 TOKEN = config('TOKEN')
 TERMLENGTH = config('TERMLENGTH')
-SERVICEMESSAGEDELETE = config('SERVICEMESSAGEDELETE')
+
+# Service Message - how long Marvins service messages stay before deletion
+short_duration = 15
+standard_duration = 30
+long_duration = 60
+
 
 # Separator character. Used for commands with a to/from type response
 separator = '->'
@@ -75,7 +80,7 @@ cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT N
 cursor.execute("CREATE TABLE IF NOT EXISTS 'users' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL, 'status' TEXT NOT NULL, 'hp_house' TEXT, 'username' TEXT NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_points' ('user_id' INTEGER NOT NULL, chat_id INT NOT NULL, 'points' INT NOT NULL, 'timestamp' TEXT NOT NULL, 'term_id' TEXT NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_terms' ('chat_id' INT NOT NULL, 'term_id' TEXT NOT NULL, 'start_date' TEXT NOT NULL, 'end_date' TEXT NOT NULL, 'is_current' INT NOT NULL)")
-cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL)")
+cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL, 'duration' INT)")
 
 
 # Make timestamps pretty again
@@ -179,24 +184,32 @@ _Shows all users last activity_
 
 def help_command(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /help is issued."""
+    time = datetime.now()
+    timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
+
     chat_id = str(update.message.chat_id)
     user_detail = activity_status_check(context.bot.id,chat_id,context)
-    context.bot.send_message(chat_id, text="To get help, PM me  @" + user_detail[1].user.mention_markdown() + " and send me the Start or /start command", parse_mode='markdown')
+    messageinfo = context.bot.send_message(chat_id, text="To get help, PM me  @" + user_detail[1].user.mention_markdown() + " and send me the Start or /start command", parse_mode='markdown')
+    log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
 
 # /add functionality 
 # Creates a new trigger, invoked with /add trigger_word <separator> trigger_response
 # 
 def add_trigger_command(update: Update, context: CallbackContext) -> None:
+    time = datetime.now()
+    timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
     """Adds a new trigger when the /add command is used"""
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
 
     # Validations.
     if(len(chat_text.split()) < 2):
-        update.message.reply_text("Bad Arguments, create a trigger with: \n\n /add trigger " + separator + " trigger_response")
+        messageinfo = update.message.reply_text("Bad Arguments, create a trigger with: \n\n/add trigger " + separator + " trigger_response")
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
         return
     if(chat_text.find(separator, 1) == -1):
-        update.message.reply_text("Separator not found, create a trigger with: \n\n /add trigger " + separator + " trigger_response")
+        messageinfo = update.message.reply_text("Separator not found, create a trigger with: \n\n/add trigger " + separator + " trigger_response")
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
         return
 
     rest_text = chat_text.split(' ', 1)[1]
@@ -205,10 +218,12 @@ def add_trigger_command(update: Update, context: CallbackContext) -> None:
     trigger_response = u'' + rest_text.split(separator, 1)[1].strip()
 
     if(len(trigger_response) < 1):
-        update.message.reply_text("Bad Arguments, create a trigger with: \n\n /add trigger " + separator + " trigger_response")
+        messageinfo = update.message.reply_text("Bad Arguments, create a trigger with: \n\n /add trigger " + separator + " trigger_response")
+        log_bot_message(messageinfo.message_id,chat_id,timestamp)
         return
     if(len(trigger_response) > 3000):
-        update.message.reply_text('Response too long. [chars > 3000]')
+        messageinfo = update.message.reply_text('Response too long. [chars > 3000]')
+        log_bot_message(messageinfo.message_id,chat_id,timestamp)
         return
 
     # Save trigger for the group
@@ -216,16 +231,21 @@ def add_trigger_command(update: Update, context: CallbackContext) -> None:
     if lookup[0] == 1: 
         cursor.execute("UPDATE triggers SET trigger_response = ? WHERE trigger_word = ? AND chat_id = ?",(trigger_response, trigger_word, chat_id))
         db.commit()
-        context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] updated.")
+        messageinfo = context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] updated.")
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
     elif lookup[0] == 0:
         cursor.execute("INSERT INTO triggers (trigger_word,trigger_response,chat_id) VALUES(?,?,?)",(trigger_word,trigger_response,chat_id))
         db.commit()
-        context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] created.")
+        messageinfo = context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] created.")
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
 
 # /del functionality 
 # Removes any given trigger from a group. 
 # Invoked with /del <trigger_word>
 def del_trigger_command(update: Update, context: CallbackContext) -> None:
+    time = datetime.now()
+    timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
+
     """Removes a trigger when the /del command is used"""
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
@@ -239,9 +259,11 @@ def del_trigger_command(update: Update, context: CallbackContext) -> None:
     if lookup[0] == 1: 
         cursor.execute("DELETE FROM triggers WHERE trigger_word = ? AND chat_id = ?",(trigger_word,chat_id))
         db.commit()
-        context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] deleted.")
+        messageinfo = context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] deleted.")
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
     elif lookup[0] == 0:
-        context.bot.send_message(chat_id, text="Trigger not found.")
+        messageinfo = context.bot.send_message(chat_id, text="Trigger not found.")
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
 
 # Checks if a trigger exists, if yes, returns the value
 # 
@@ -704,8 +726,8 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
         messageinfo = context.bot.send_message(chat_id, text="Yer not a Wizard Harry ... or ... an Admin ... " + user_detail[1].user.mention_markdown(), parse_mode='markdown')
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
 
-def log_bot_message(message_id, chat_id, timestamp) -> None:
-    cursor.execute("INSERT INTO bot_service_messages (message_id, chat_id, created_date, status) VALUES(?,?,?,'sent')",(message_id, chat_id, timestamp))
+def log_bot_message(message_id, chat_id, timestamp, duration = standard_duration) -> None:
+    cursor.execute("INSERT INTO bot_service_messages (message_id, chat_id, created_date, status, duration) VALUES(?,?,?,'sent',?)",(message_id, chat_id, timestamp, duration))
     db.commit()
 
 def del_bot_message(chat_id, context):
@@ -715,8 +737,9 @@ def del_bot_message(chat_id, context):
     if rows:
         for row in rows:
             message_id = row[1]
+            duration = row[4]
             created_date = datetime.strptime(row[2], '%Y-%m-%d %H:%M:%S')
-            target_date = created_date + timedelta(seconds=int(SERVICEMESSAGEDELETE))
+            target_date = created_date + timedelta(seconds=int(duration))
             if time > target_date:
                 context.bot.delete_message(chat_id,message_id)
                 cursor.execute("DELETE FROM bot_service_messages WHERE chat_id = ? AND message_id = ?",(chat_id,message_id))
@@ -726,9 +749,10 @@ def del_bot_message(chat_id, context):
 # User can either send a simple '/roll' command which will default to a single eight sided die or,
 # User can send a '/roll XDY' command where X = number of dice, D is the separator, Y = sides on each die. 
 def roll_command(update: Update, context: CallbackContext) -> None:
-    """Send a message when the command /help is issued."""
     chat_id = update.message.chat_id
     chat_text = update.message.text
+    time = datetime.now()
+    timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
 
     regexp = re.compile('[0-9]+D[0-9]+', re.IGNORECASE)
 
@@ -740,7 +764,8 @@ def roll_command(update: Update, context: CallbackContext) -> None:
         low = 1
         high = 8
         rolled = random.randint(low, high)
-        context.bot.send_message(chat_id, text=random.choice(rollSass) + "\n\n" + str(rolled))
+        messageinfo = context.bot.send_message(chat_id, text=random.choice(rollSass) + "\n\n" + str(rolled))
+        log_bot_message(messageinfo.message_id,chat_id,timestamp, long_duration)
 
     elif(regexp.search(chat_text)):
         dice = chat_text.split()
@@ -753,10 +778,12 @@ def roll_command(update: Update, context: CallbackContext) -> None:
         while loop <= totaldice:                
             loop = loop + 1
             rolled.append(random.randint(low, high))
-        context.bot.send_message(chat_id, text=random.choice(rollSass) + "\n\n" + str(rolled))
+        messageinfo = context.bot.send_message(chat_id, text=random.choice(rollSass) + "\n\n" + str(rolled))
+        log_bot_message(messageinfo.message_id,chat_id,timestamp, long_duration)
 
     else:
-        context.bot.send_message(chat_id, text="Stupid human. Of course you typed the wrong format. It's either '/roll' or '/roll XdY' where X is the number of dice, and Y is how many sides each dice has. For example, '/roll 2d6'")
+        messageinfo = context.bot.send_message(chat_id, text="Silly human. Of course you typed the wrong format. It's either '/roll' or '/roll XdY' where X is the number of dice, and Y is how many sides each dice has. For example, '/roll 2d6'")
+        log_bot_message(messageinfo.message_id,chat_id,timestamp, short_duration)
 
 # Original Code below here
 def main() -> None:
