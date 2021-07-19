@@ -164,6 +164,9 @@ Negative = -, 😡, 👎
 *Bulk Give/Remove House Point (Admin Only):*
 /points @username <pointsTotal>
 
+*Show current House and Champion Totals:*
+/points totals
+
 *__Roll Dice__*
 *Standard Roll*
 /roll
@@ -735,22 +738,28 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
             if rows:
                 for row in rows:
                     user_detail = activity_status_check(row[0],chat_id,context)
-                    user_house = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? AND user_id = ?",(chat_id,user_detail[1].user.id))
-                    user_house = user_house.fetchone()
-                    user_points = row[2]
+                    user_status = (context.bot.get_chat_member(chat_id,user_detail[1].user.id)).status
+                    if user_status in ("member","creator","administrator"):
+                        user_house = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? AND user_id = ?",(chat_id,user_detail[1].user.id))
+                        user_house = user_house.fetchone()
+                        user_points = row[2]
 
-                    if user_house[0] == "Gryffindor":
-                        points_Gryffindor += user_points
-                    elif user_house[0] == "Slytherin":
-                        points_Slytherin += user_points
-                    elif user_house[0] == "Hufflepuff":
-                        points_Hufflepuff += user_points
-                    elif user_house[0] == "Ravenclaw":
-                        points_Ravenclaw += user_points
-                    elif user_house[0] == "Houseelf":
-                        points_Houseelf += user_points
+                        if user_house[0] == "Gryffindor":
+                            points_Gryffindor += user_points
+                        elif user_house[0] == "Slytherin":
+                            points_Slytherin += user_points
+                        elif user_house[0] == "Hufflepuff":
+                            points_Hufflepuff += user_points
+                        elif user_house[0] == "Ravenclaw":
+                            points_Ravenclaw += user_points
+                        elif user_house[0] == "Houseelf":
+                            points_Houseelf += user_points
+                        else: 
+                            points_Muggles += user_points
                     else: 
-                        points_Muggles += user_points
+                        cursor.execute("UPDATE users SET status = 'left' WHERE user_id = ? AND chat_id = ?",(str(user_detail[1].user.id),chat_id))
+                        db.commit()
+
 
                 # Create points list, sort it, format it.
                 points_list = {"🦁 : ": points_Gryffindor, "🐍 : ": points_Slytherin, "🦡 : ": points_Hufflepuff, "🦅 : ": points_Ravenclaw, "🧝‍♀️ : ": points_Houseelf}
@@ -761,7 +770,7 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
                     sentenceHouse += key + str(value) + "\n"
 
                 # Get House Champion for each House
-                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Gryffindor' ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
+                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Gryffindor' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
                 rows = select.fetchone()
                 if rows:
                     gryffindor_points = f"({rows[2]})"
@@ -771,7 +780,7 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
                     gryffindor_points = " "
                     gryffindor_sentence = "Nobody yet!" 
 
-                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Slytherin' ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
+                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Slytherin' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
                 rows = select.fetchone()
                 if rows:
                     slytherin_points = f"({rows[2]})"
@@ -781,7 +790,7 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
                     slytherin_points = " "
                     slytherin_sentence = "Nobody yet!" 
 
-                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Hufflepuff' ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
+                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Hufflepuff' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
                 rows = select.fetchone()
                 if rows:
                     hufflepuff_points = f"({rows[2]})"
@@ -791,7 +800,7 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
                     hufflepuff_points = " "
                     hufflepuff_sentence = "Nobody yet!" 
 
-                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Ravenclaw' ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
+                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Ravenclaw' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
                 rows = select.fetchone()
                 if rows:
                     ravenclaw_points = f"({rows[2]})"
@@ -801,7 +810,7 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
                     ravenclaw_points = " "
                     ravenclaw_sentence = "Nobody yet!" 
 
-                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Houseelf' ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
+                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Houseelf' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
                 rows = select.fetchone()
                 if rows:
                     houseelf_points = f"({rows[2]})"
