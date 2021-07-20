@@ -16,15 +16,16 @@ USAGE:
 
 FEATURES: 
 - Dice Roll (/roll or /roll XdY e.g /roll 2d8)
-- Triggers (/add trigger -> triggerResponse ... /del trigger)
+- Text based Triggers (/add trigger -> triggerResponse ... /del trigger)
+- Media Based Triggers, with the MEDIA keyword (/add trigger_word -> MEDIA) 
 - Activity tracker, check the last time users interacted with the group. (Passive feature, /activity to check the log)
 - 'Personality' - Marvin can be configured to 'talk' at the group occassionally. How sassy he is, is up to you!
-
-WISHLIST:
-- Create GIF based Triggers (probably something like '/add trigger_word -> <MAGIC-GIF-WORD>' and wait for user to send gif)
-
-IN PROGRESS: 
-- Harry Potter Game - details TBC
+- Harry Potter Reputation System
+    - Add users to their HP House (/sortinghat @username <housename>)
+    - List HP House members (/sortinghat)
+    - Give/Take reputation from a user (Reply to their message with + or -)
+    - Bulk award reputation (Admin only) (/points @username <pointsTotal>)
+    - List points totals (/points totals)
 
 """
 
@@ -76,11 +77,11 @@ logger = logging.getLogger(__name__)
 dbname = "marvin"
 db = sqlite3.connect(dbname+".db", check_same_thread=False)
 cursor = db.cursor()
-cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT NULL, 'trigger_response' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL)")
+cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT NULL, 'trigger_response' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL, 'trigger_response_type' TEXT, 'trigger_response_media_id' TEXT)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'users' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL, 'status' TEXT NOT NULL, 'hp_house' TEXT, 'username' TEXT NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_points' ('user_id' INTEGER NOT NULL, chat_id INT NOT NULL, 'points' INT NOT NULL, 'timestamp' TEXT NOT NULL, 'term_id' TEXT NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_terms' ('chat_id' INT NOT NULL, 'term_id' TEXT NOT NULL, 'start_date' TEXT NOT NULL, 'end_date' TEXT NOT NULL, 'is_current' INT NOT NULL)")
-cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL, 'duration' INT)")
+cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL, 'duration' INT, 'type' TEXT)")
 
 
 # Make timestamps pretty again
@@ -229,19 +230,31 @@ def add_trigger_command(update: Update, context: CallbackContext) -> None:
         messageinfo = update.message.reply_text('Response too long. [chars > 3000]')
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
         return
+    
+    # If this is a media trigger, prompt user for what they want to save
+    # Response is captured in chat_image_polling()
+    if(trigger_response.lower() == "media"):
+        messageinfo = context.bot.send_message(chat_id,text=chat_text + "\n\nIt looks like you want to save a GIF, Image or Sticker for your trigger. Reply to this message inside 90 seconds with the content and I'll add it.")
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,long_duration,type="MediaTrigger")
+        return
 
+    # Save trigger for the group
+    save_trigger(chat_id,trigger_word,trigger_response,timestamp,context)
+
+def save_trigger(chat_id,trigger_word,trigger_response,timestamp,context,trigger_response_type = 'text',trigger_response_media_id = 'None') -> None:
     # Save trigger for the group
     lookup = trigger_lookup(trigger_word, chat_id)
     if lookup[0] == 1: 
-        cursor.execute("UPDATE triggers SET trigger_response = ? WHERE trigger_word = ? AND chat_id = ?",(trigger_response, trigger_word, chat_id))
+        cursor.execute("UPDATE triggers SET trigger_response = ? WHERE trigger_word = ? AND chat_id = ? AND trigger_response_type = ? AND trigger_response_media_id = ?",(trigger_response, trigger_word, chat_id,trigger_response_type,trigger_response_media_id))
         db.commit()
         messageinfo = context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] updated.")
         log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
     elif lookup[0] == 0:
-        cursor.execute("INSERT INTO triggers (trigger_word,trigger_response,chat_id) VALUES(?,?,?)",(trigger_word,trigger_response,chat_id))
+        cursor.execute("INSERT INTO triggers (trigger_word,trigger_response,chat_id,trigger_response_type,trigger_response_media_id) VALUES(?,?,?,?,?)",(trigger_word,trigger_response,chat_id,trigger_response_type,trigger_response_media_id))
         db.commit()
         messageinfo = context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] created.")
         log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
+
 
 # /del functionality 
 # Removes any given trigger from a group. 
@@ -279,7 +292,14 @@ def trigger_lookup(trigger_word, chat_id) -> None:
     if rows:
         for row in rows:
             if str(row[0]) == trigger_word and str(row[2]) == chat_id:
-                return 1,row[1]
+                if row[3] == "text":
+                    return 1,row[1]
+                elif row[3] == "gif":
+                    return 2,row[4]
+                elif row[3] == "photo":
+                    return 3,row[4]  
+                elif row[3] == "sticker":
+                    return 4,row[4]               
             else: 
                 return 0
     else: 
@@ -327,72 +347,6 @@ def list_trigger_detail_command(update: Update, context: CallbackContext) -> Non
         error = 'Something went wrong or trigger wasnt found'
         context.bot.send_message(chat_id, text="Hmm, doesn't look like this group has any triggers yet!")
         return 0, error
-
-# Passive chat polling 
-# Processes each message received in any groups where the Bot is active
-# Feeds into the Trigger and Activity functionality
-def chat_polling(update: Update, context: CallbackContext) -> None:
-    
-    chat_id = str(update.message.chat_id)
-    chat_text = update.message.text
-    user_id = str(update.message.from_user.id)
-    user_status = (context.bot.get_chat_member(chat_id,user_id)).status
-    username = context.bot.get_chat_member(chat_id,user_id).user.username
-
-    time = datetime.now()
-    timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
-    
-    # Lookup to check if text is a trigger - send trigger message to group.
-    lookup = trigger_lookup(chat_text.lower(), chat_id)
-    if lookup[0] == 1:
-        context.bot.send_message(chat_id, text=lookup[1])
-
-    # Lookup to check if user is in activity DB, update the DB either way.
-    actLookup = activity_lookup(user_id, chat_id)
-    if actLookup[0] == 1: 
-        cursor.execute("UPDATE users SET timestamp = ?, status = ?, username = ? WHERE user_id = ? AND chat_id = ?",(timestamp,user_status,username,user_id,chat_id))
-        db.commit()
-    elif actLookup[0] == 0:
-        cursor.execute("INSERT INTO users (user_id,chat_id,timestamp,status,username) VALUES(?,?,?,?,?)",(user_id,chat_id,timestamp,user_status,username))
-        db.commit()
-    
-    # Marvins Personality
-    global frequency_count
-    if frequency_count > frequency_total:
-        marvin_says = marvin_personality()
-        context.bot.send_message(chat_id, text=marvin_says)
-        frequency_count = 0
-    else:
-        frequency_count += 1
-
-    hp_term_tracker(chat_id)
-    hp_points(update, context, chat_id, timestamp)
-    del_bot_message(chat_id, context)
-
-
-def marvin_personality() -> None:
-    json_file = open("Sass.json")
-    Sass = json.load(json_file)
-    json_file.close()
-
-    return random.choice(Sass)
-
-
-# Activity Lookup function
-# Checks if user has been logged to the DB previously
-# 
-def activity_lookup(user_id, chat_id) -> None:
-    select = cursor.execute("SELECT * from users WHERE user_id = ? AND chat_id = ?",(user_id,chat_id))
-    rows = select.fetchall()
-    
-    if rows:
-        for row in rows:
-            if str(row[0]) == user_id and str(row[1]) == chat_id:
-                return 1,row[0]
-    else: 
-        error = 'Something went wrong or user activity entry was not found.'
-        return 0, error
-
 
 # /activity Command
 # Returns a sorted list of recent user activity
@@ -582,73 +536,72 @@ def hp_points(update,context,chat_id,timestamp) -> None:
     term_id = rows[1]
     positive = ["+","❤️","😍","👍"]
     negative = ["-","😡","👎"]
+    
+    to_user_id = update.message.reply_to_message.from_user.id
+    from_user_id = update.message.from_user.id
 
-    # Check if message is a a reply
-    if update.message.reply_to_message:
-        if not update.message.reply_to_message.from_user.is_bot:
-            to_user_id = update.message.reply_to_message.from_user.id
-            from_user_id = update.message.from_user.id
-        
-            # Get Current Points
-            select = cursor.execute("SELECT points FROM hp_points WHERE chat_id = ? AND term_id = ? and user_id = ?",(chat_id,term_id,to_user_id))
-            rows = select.fetchone()
 
-            # Get Sender & Target Users House
-            sender = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? and user_id = ?",(chat_id,from_user_id))
-            sender = sender.fetchone()
-            if sender[0] == "Gryffindor":
-                senderHouse = "🦁"
-            elif sender[0] == "Slytherin":
-                senderHouse = "🐍"
-            elif sender[0] == "Hufflepuff":
-                senderHouse = "🦡"
-            elif sender[0] == "Ravenclaw":
-                senderHouse = "🦅"
-            elif sender[0] == "Houseelf":
-                senderHouse = "🧝‍♀️"
-            else: 
-                senderHouse = "❌"
+    # Get Current Points
+    select = cursor.execute("SELECT points FROM hp_points WHERE chat_id = ? AND term_id = ? and user_id = ?",(chat_id,term_id,to_user_id))
+    rows = select.fetchone()
 
-            receiver = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? and user_id = ?",(chat_id,to_user_id))
-            receiver = receiver.fetchone()
-            if receiver[0] == "Gryffindor":
-                receiverHouse = "🦁"
-            elif receiver[0] == "Slytherin":
-                receiverHouse = "🐍"
-            elif receiver[0] == "Hufflepuff":
-                receiverHouse = "🦡"
-            elif receiver[0] == "Ravenclaw":
-                receiverHouse = "🦅"
-            elif receiver[0] == "Houseelf":
-                receiverHouse = "🧝‍♀️"
-            else: 
-                receiverHouse = "❌"
+    # Get Sender & Target Users House
+    sender = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? and user_id = ?",(chat_id,from_user_id))
+    sender = sender.fetchone()
+    if sender[0] == "Gryffindor":
+        senderHouse = "🦁"
+    elif sender[0] == "Slytherin":
+        senderHouse = "🐍"
+    elif sender[0] == "Hufflepuff":
+        senderHouse = "🦡"
+    elif sender[0] == "Ravenclaw":
+        senderHouse = "🦅"
+    elif sender[0] == "Houseelf":
+        senderHouse = "🧝‍♀️"
+    else: 
+        senderHouse = "❌"
 
-            # Check if message was positive or not
-            if update.message.text in positive:
-                if rows:
-                    current_points = rows[0]
-                    current_points += 1
-                    cursor.execute("UPDATE hp_points SET points = ?, timestamp = ? WHERE user_id = ? AND chat_id = ? AND term_id = ?",(current_points,timestamp,to_user_id,chat_id,term_id))
-                    db.commit()
-                else: 
-                    current_points = 1    
-                    cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(to_user_id,chat_id,current_points,timestamp,term_id))
-                    db.commit()
-                messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown')
-                log_bot_message(messageinfo.message_id,chat_id,timestamp)
-            elif update.message.text in negative:
-                if rows:
-                    current_points = rows[0]
-                    current_points -= 1
-                    cursor.execute("UPDATE hp_points SET points = ?, timestamp = ? WHERE user_id = ? AND chat_id = ? AND term_id = ?",(current_points,timestamp,to_user_id,chat_id,term_id))
-                    db.commit()
-                else: 
-                    current_points = -1    
-                    cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(to_user_id,chat_id,current_points,timestamp,term_id))
-                    db.commit()
-                messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has deducted " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown' )
-                log_bot_message(messageinfo.message_id,chat_id,timestamp)
+    receiver = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? and user_id = ?",(chat_id,to_user_id))
+    receiver = receiver.fetchone()
+    if receiver[0] == "Gryffindor":
+        receiverHouse = "🦁"
+    elif receiver[0] == "Slytherin":
+        receiverHouse = "🐍"
+    elif receiver[0] == "Hufflepuff":
+        receiverHouse = "🦡"
+    elif receiver[0] == "Ravenclaw":
+        receiverHouse = "🦅"
+    elif receiver[0] == "Houseelf":
+        receiverHouse = "🧝‍♀️"
+    else: 
+        receiverHouse = "❌"
+
+    # Check if message was positive or not
+    if update.message.text in positive:
+        if rows:
+            current_points = rows[0]
+            current_points += 1
+            cursor.execute("UPDATE hp_points SET points = ?, timestamp = ? WHERE user_id = ? AND chat_id = ? AND term_id = ?",(current_points,timestamp,to_user_id,chat_id,term_id))
+            db.commit()
+        else: 
+            current_points = 1    
+            cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(to_user_id,chat_id,current_points,timestamp,term_id))
+            db.commit()
+        messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown')
+        log_bot_message(messageinfo.message_id,chat_id,timestamp)
+    elif update.message.text in negative:
+        if rows:
+            current_points = rows[0]
+            current_points -= 1
+            cursor.execute("UPDATE hp_points SET points = ?, timestamp = ? WHERE user_id = ? AND chat_id = ? AND term_id = ?",(current_points,timestamp,to_user_id,chat_id,term_id))
+            db.commit()
+        else: 
+            current_points = -1    
+            cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(to_user_id,chat_id,current_points,timestamp,term_id))
+            db.commit()
+        messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has deducted " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown' )
+        log_bot_message(messageinfo.message_id,chat_id,timestamp)
+
 
 def hp_points_admin(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
@@ -834,8 +787,8 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
         messageinfo = context.bot.send_message(chat_id, text="Admin Only: \n/points @username <pointsTotal>\n\nAll Users:\n/points totals")
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
 
-def log_bot_message(message_id, chat_id, timestamp, duration = standard_duration) -> None:
-    cursor.execute("INSERT INTO bot_service_messages (message_id, chat_id, created_date, status, duration) VALUES(?,?,?,'sent',?)",(message_id, chat_id, timestamp, duration))
+def log_bot_message(message_id, chat_id, timestamp, duration = standard_duration, type = "Standard") -> None:
+    cursor.execute("INSERT INTO bot_service_messages (message_id, chat_id, created_date, status, duration, type) VALUES(?,?,?,'sent',?,?)",(message_id, chat_id, timestamp, duration, type))
     db.commit()
 
 def del_bot_message(chat_id, context):
@@ -893,6 +846,120 @@ def roll_command(update: Update, context: CallbackContext) -> None:
         messageinfo = context.bot.send_message(chat_id, text="Silly human. Of course you typed the wrong format. It's either '/roll' or '/roll XdY' where X is the number of dice, and Y is how many sides each dice has. For example, '/roll 2d6'")
         log_bot_message(messageinfo.message_id,chat_id,timestamp, short_duration)
 
+# Passive chat polling 
+# Processes each message received in any groups where the Bot is active
+# Feeds into the Trigger and Activity functionality
+def chat_polling(update: Update, context: CallbackContext) -> None:
+    chat_id = str(update.message.chat_id)
+    chat_text = update.message.text
+    user_id = str(update.message.from_user.id)
+    user_status = (context.bot.get_chat_member(chat_id,user_id)).status
+    username = context.bot.get_chat_member(chat_id,user_id).user.username
+
+    time = datetime.now()
+    timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
+    
+    # Lookup to check if text is a trigger - send trigger message to group.
+    lookup = trigger_lookup(chat_text.lower(), chat_id)
+    if lookup[0] == 1:
+        context.bot.send_message(chat_id, text=lookup[1])
+    elif lookup[0] == 2:
+        context.bot.send_animation(chat_id, animation=lookup[1])
+    elif lookup[0] == 3:
+        context.bot.send_photo(chat_id, photo=lookup[1])
+    elif lookup[0] == 4:
+        context.bot.send_sticker(chat_id, sticker=lookup[1])  
+
+    # Lookup to check if user is in activity DB, update the DB either way.
+    actLookup = activity_lookup(user_id, chat_id)
+    if actLookup[0] == 1: 
+        cursor.execute("UPDATE users SET timestamp = ?, status = ?, username = ? WHERE user_id = ? AND chat_id = ?",(timestamp,user_status,username,user_id,chat_id))
+        db.commit()
+    elif actLookup[0] == 0:
+        cursor.execute("INSERT INTO users (user_id,chat_id,timestamp,status,username) VALUES(?,?,?,?,?)",(user_id,chat_id,timestamp,user_status,username))
+        db.commit()
+    
+    # Marvins Personality
+    global frequency_count
+    if frequency_count > frequency_total:
+        marvin_says = marvin_personality()
+        context.bot.send_message(chat_id, text=marvin_says)
+        frequency_count = 0
+    else:
+        frequency_count += 1
+
+    hp_term_tracker(chat_id)
+    # Check if message is a a reply
+    if update.message.reply_to_message:
+        if not update.message.reply_to_message.from_user.is_bot:
+            hp_points(update, context, chat_id, timestamp)
+        else:
+            pass # replying to Marvin with text, does nothing.
+    del_bot_message(chat_id, context)
+
+
+def marvin_personality() -> None:
+    json_file = open("Sass.json")
+    Sass = json.load(json_file)
+    json_file.close()
+
+    return random.choice(Sass)
+
+# Image Polling
+def chat_media_polling(update: Update, context: CallbackContext) -> None:
+    chat_id = str(update.message.chat_id)
+    time = datetime.now()
+    timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
+
+    # What sort of message have we received?
+    if update.message.animation:
+        file_id = update.message.animation.file_id
+        trigger_type = "gif"
+    elif update.message.photo: 
+        file_id = update.message.photo[-1].file_id
+        trigger_type = "photo"
+    elif update.message.sticker: 
+        file_id = update.message.sticker.file_id
+        trigger_type = "sticker"
+    else:
+        print("Received a file type I'm not familiar with")
+        print(update.message)
+    
+    # If this is a response to a Marvin service message, check if we need to save a trigger
+    if update.message.reply_to_message:
+        if update.message.reply_to_message.from_user.is_bot:
+            # Check if there's a valid service message waiting for a response otherwise do nothing
+            message_id = update.message.reply_to_message.message_id
+            select = cursor.execute("SELECT * FROM bot_service_messages WHERE chat_id = ? AND message_id = ? AND type = 'MediaTrigger'",(chat_id,message_id))
+            rows = select.fetchone()
+            if rows:
+                chat_text = update.message.reply_to_message.text
+                rest_text = chat_text.split(' ', 1)[1]
+                trigger_word = u'' + rest_text.split(separator)[0].strip().lower()
+                save_trigger(chat_id,trigger_word,"media",timestamp,context,trigger_type,file_id)
+                #context.bot.send_message(chat_id, text="Nice, I got that. \n\nThe GIF File ID is " + update.message.animation.file_id + "\n\nThe original trigger you tried to add was " + trigger_word)
+                #context.bot.send_animation(chat_id, animation=update.message.animation.file_id)
+            else:
+                # Not a valid service message, move on
+                pass
+        else:
+            pass # replying to a User with images etc, does nothing.
+
+# Activity Lookup function
+# Checks if user has been logged to the DB previously
+# 
+def activity_lookup(user_id, chat_id) -> None:
+    select = cursor.execute("SELECT * from users WHERE user_id = ? AND chat_id = ?",(user_id,chat_id))
+    rows = select.fetchall()
+    
+    if rows:
+        for row in rows:
+            if str(row[0]) == user_id and str(row[1]) == chat_id:
+                return 1,row[0]
+    else: 
+        error = 'Something went wrong or user activity entry was not found.'
+        return 0, error
+
 # Original Code below here
 def main() -> None:
     """Start the bot."""
@@ -916,6 +983,7 @@ def main() -> None:
 
     # on non command i.e message - checks each message and runs it through our poller
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, chat_polling))
+    dispatcher.add_handler(MessageHandler(~Filters.text & ~Filters.command, chat_media_polling))
 
     # Start the Bot
     updater.start_polling()
