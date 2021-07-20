@@ -849,7 +849,10 @@ def roll_command(update: Update, context: CallbackContext) -> None:
 # Processes each message received in any groups where the Bot is active
 # Feeds into the Trigger and Activity functionality
 def chat_polling(update: Update, context: CallbackContext) -> None:
-    chat_id = str(update.message.chat_id)
+    if update.message.chat_id:      
+        chat_id = str(update.message.chat_id)
+    elif update.message.chat.id:
+        chat_id = str(update.message.chat.id)
     chat_text = update.message.text
     user_id = str(update.message.from_user.id)
     user_status = (context.bot.get_chat_member(chat_id,user_id)).status
@@ -859,7 +862,6 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     
     # Lookup to check if text is a trigger - send trigger message to group.
     lookup = trigger_lookup(chat_text.lower(), chat_id)
-    print(update)
     if lookup[0] == 1:
         context.bot.send_message(chat_id, text=lookup[1])
     elif lookup[0] == 2:
