@@ -273,7 +273,7 @@ def del_trigger_command(update: Update, context: CallbackContext) -> None:
     trigger_word = chat_text.split(' ', 1)[1].strip().lower()
 
     lookup = trigger_lookup(trigger_word, chat_id)
-    if lookup[0] == 1: 
+    if lookup[0]in (1,2,3,4): 
         cursor.execute("DELETE FROM triggers WHERE trigger_word = ? AND chat_id = ?",(trigger_word,chat_id))
         db.commit()
         messageinfo = context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] deleted.")
@@ -855,7 +855,7 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     user_id = str(update.message.from_user.id)
     user_status = (context.bot.get_chat_member(chat_id,user_id)).status
     username = context.bot.get_chat_member(chat_id,user_id).user.username
-
+    print('gif coming as text')
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
     
@@ -910,9 +910,10 @@ def chat_media_polling(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
-
+    print(update)
     # What sort of message have we received?
     if update.message.animation:
+        print(update.message.animation)
         file_id = update.message.animation.file_id
         trigger_type = "gif"
     elif update.message.photo: 
