@@ -53,7 +53,6 @@ short_duration = 30
 standard_duration = 60
 long_duration = 90
 
-
 # Separator character. Used for commands with a to/from type response
 separator = '->'
 
@@ -860,6 +859,7 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     
     # Lookup to check if text is a trigger - send trigger message to group.
     lookup = trigger_lookup(chat_text.lower(), chat_id)
+    print(lookup)
     if lookup[0] == 1:
         context.bot.send_message(chat_id, text=lookup[1])
     elif lookup[0] == 2:
