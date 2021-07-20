@@ -853,7 +853,9 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
         chat_id = str(update.message.chat_id)
     elif update.message.chat.id:
         chat_id = str(update.message.chat.id)
+    print(chat_id)
     chat_text = update.message.text
+    print(chat_text)
     user_id = str(update.message.from_user.id)
     user_status = (context.bot.get_chat_member(chat_id,user_id)).status
     username = context.bot.get_chat_member(chat_id,user_id).user.username
