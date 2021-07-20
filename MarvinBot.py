@@ -859,7 +859,7 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     
     # Lookup to check if text is a trigger - send trigger message to group.
     lookup = trigger_lookup(chat_text.lower(), chat_id)
-    print(lookup)
+    print(update)
     if lookup[0] == 1:
         context.bot.send_message(chat_id, text=lookup[1])
     elif lookup[0] == 2:
