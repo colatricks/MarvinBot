@@ -134,49 +134,61 @@ def start(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
     context.bot.send_message(chat_id, text="""*Don't Panic! I have a Towel!*
 
-*__Triggers__*
-*Add a new trigger:*        
+*TRIGGERS*
+*=========================*
+_Add a new trigger:_
 /add triggerWord -> triggerResponse
 
-*Delete a trigger:*             
+_Add a new GIF, Image or Sticker trigger:_
+/add triggerWord -> MEDIA 
+
+Note, MEDIA is case-insensitive.
+
+_Delete a trigger:_
 /del triggerWord
 
-*List triggers:*              
+_List triggers:_
 /list 
 _or_
 /listDetail
 _The latter will PM you a full list of all triggers and their responses. Note you must PM Marvin first and send a /start command to him._
 
-*__Harry Potter__*
-*Add someone to their HP House:*
+
+*HP REPUTATION SYSTEM*
+*=========================*
+_Add someone to their HP House:_
 /sortinghat @username <houseName>
 
-*List House Members:*
+_List House Members:_
 /sortinghat
 _or_
 /sortinghat @username
 _The latter will return a single user, the former returns All users_
 
-*Give/Remove House Point:*
+_Give/Remove House Point:_
 Positive = +, ❤️, 😍, 👍
 Negative = -, 😡, 👎
 
-*Bulk Give/Remove House Point (Admin Only):*
+_Bulk Give/Remove House Point (Admin Only):_
 /points @username <pointsTotal>
 
-*Show current House and Champion Totals:*
+_Show current House and Champion Totals:_
 /points totals
 
-*__Roll Dice__*
-*Standard Roll*
+
+*ROLL DICE*
+*=========================*
+_Standard Roll_
 /roll
 
-*Custom Roll*
+_Custom Roll_
 /roll 2d8
 _The number 2 represents how many dice to roll, the number 8 represents how many sides each dice has._
 
-*__Group General__*
-*Activity*
+
+*GROUP GENERAL*
+*=========================*
+_Activity_
 /activity 
 _Shows users not active in the last two days_
 
@@ -670,6 +682,9 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
                     else:
                         messageinfo = context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " of " + receiverHouse + " has been deducted " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points),parse_mode='markdown' )
                         log_bot_message(messageinfo.message_id,chat_id,timestamp)
+                else: 
+                    messageinfo = context.bot.send_message(chat_id, text="Hmm, that user doesn't seem to exist.",parse_mode='markdown' )
+                    log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
         else:
             messageinfo = context.bot.send_message(chat_id, text="Yer not a Wizard Harry ... or ... an Admin ... " + user_detail[1].user.mention_markdown(), parse_mode='markdown')
             log_bot_message(messageinfo.message_id,chat_id,timestamp)
@@ -786,6 +801,37 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
         messageinfo = context.bot.send_message(chat_id, text="Admin Only: \n/points @username <pointsTotal>\n\nAll Users:\n/points totals")
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
 
+def hp_tags(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    chat_id = update.message.chat_id
+    user_detail = activity_status_check(user_id,chat_id,context)
+    user_status = user_detail[0]
+    time = datetime.now()
+    timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
+
+    if user_status in ("creator","administrator"):
+        if len(update.message.text.split()) == 4:
+            command = update.message.text.split()
+            if "#" in command[1] and command[2].isdigit() and command[3].isdigit():
+                points = int(command[2])
+                limit = int(command[3])
+                if points > 20 or points < 1:
+                    messageinfo = context.bot.send_message(chat_id, text="Points need to be between 1 and 20", parse_mode='markdown')
+                else:
+                    messageinfo = context.bot.send_message(chat_id, text=f"Tag Name: {command[1]}\n Points Awarded: {points}\n Limit per day: {limit}", parse_mode='markdown')
+            elif "delete" in command[1].lower():
+                if "#" in command[2]:
+                    messageinfo = context.bot.send_message(chat_id, text="Delete command found, do something", parse_mode='markdown')
+                else:
+                    messageinfo = context.bot.send_message(chat_id, text="Didn't find a tag to delete.", parse_mode='markdown')
+            else:
+                messageinfo = context.bot.send_message(chat_id, text="Something isn't right or you provided a negative points total. Command options are:\n\n/tags #tagname <pointsTotal>\n/tags delete #tagname", parse_mode='markdown')
+        else:
+            messageinfo = context.bot.send_message(chat_id, text="Something isn't right or you provided a negative points total. Command options are:\n\n/tags #tagname <pointsTotal>\n/tags delete #tagname", parse_mode='markdown')
+    else: 
+        messageinfo = context.bot.send_message(chat_id, text="Yer not a Wizard Harry ... or ... an Admin ... " + user_detail[1].user.mention_markdown(), parse_mode='markdown')
+        log_bot_message(messageinfo.message_id,chat_id,timestamp)
+
 def log_bot_message(message_id, chat_id, timestamp, duration = standard_duration, type = "Standard") -> None:
     cursor.execute("INSERT INTO bot_service_messages (message_id, chat_id, created_date, status, duration, type) VALUES(?,?,?,'sent',?,?)",(message_id, chat_id, timestamp, duration, type))
     db.commit()
@@ -849,13 +895,12 @@ def roll_command(update: Update, context: CallbackContext) -> None:
 # Processes each message received in any groups where the Bot is active
 # Feeds into the Trigger and Activity functionality
 def chat_polling(update: Update, context: CallbackContext) -> None:
+    print(update)
     if update.message.chat_id:      
         chat_id = str(update.message.chat_id)
     elif update.message.chat.id:
         chat_id = str(update.message.chat.id)
-    print(chat_id)
     chat_text = update.message.text
-    print(chat_text)
     user_id = str(update.message.from_user.id)
     user_status = (context.bot.get_chat_member(chat_id,user_id)).status
     username = context.bot.get_chat_member(chat_id,user_id).user.username
@@ -953,7 +998,6 @@ def chat_media_polling(update: Update, context: CallbackContext) -> None:
 def activity_lookup(user_id, chat_id) -> None:
     select = cursor.execute("SELECT * from users WHERE user_id = ? AND chat_id = ?",(user_id,chat_id))
     rows = select.fetchall()
-    
     if rows:
         for row in rows:
             if str(row[0]) == user_id and str(row[1]) == chat_id:
@@ -982,9 +1026,10 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("activity", activity_command))
     dispatcher.add_handler(CommandHandler("sortinghat", hp_assign_house))
     dispatcher.add_handler(CommandHandler("points", hp_points_admin))
+    dispatcher.add_handler(CommandHandler("tags", hp_tags))
 
     # on non command i.e message - checks each message and runs it through our poller
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, chat_polling))
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command & ~Filters.update.edited_message, chat_polling))
     dispatcher.add_handler(MessageHandler(~Filters.text & ~Filters.command, chat_media_polling))
 
     # Start the Bot
