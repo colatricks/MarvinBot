@@ -1,0 +1,62 @@
+*Don't Panic! I have a Towel!*
+
+*TRIGGERS*
+*=========================*
+_Add a new trigger:_
+/add triggerWord -> triggerResponse
+
+_Add a new GIF, Image or Sticker trigger:_
+/add triggerWord -> MEDIA 
+
+Note, MEDIA is case-insensitive.
+
+_Delete a trigger:_
+/del triggerWord
+
+_List triggers:_
+/list 
+_or_
+/listDetail
+_The latter will PM you a full list of all triggers and their responses. Note you must PM Marvin first and send a /start command to him._
+
+
+*HP REPUTATION SYSTEM*
+*=========================*
+_Add someone to their HP House:_
+/sortinghat @username <houseName>
+
+_List House Members:_
+/sortinghat
+_or_
+/sortinghat @username
+_The latter will return a single user, the former returns All users_
+
+_Give/Remove House Point:_
+Positive = +, ❤️, 😍, 👍
+Negative = -, 😡, 👎
+
+_Bulk Give/Remove House Point (Admin Only):_
+/points @username <pointsTotal>
+
+_Show current House and Champion Totals:_
+/points totals
+
+
+*ROLL DICE*
+*=========================*
+_Standard Roll_
+/roll
+
+_Custom Roll_
+/roll 2d8
+_The number 2 represents how many dice to roll, the number 8 represents how many sides each dice has._
+
+
+*GROUP GENERAL*
+*=========================*
+_Activity_
+/activity 
+_Shows users not active in the last two days_
+
+/activity full
+_Shows all users last activity_

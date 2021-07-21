@@ -80,7 +80,9 @@ cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT N
 cursor.execute("CREATE TABLE IF NOT EXISTS 'users' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL, 'status' TEXT NOT NULL, 'hp_house' TEXT, 'username' TEXT NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_points' ('user_id' INTEGER NOT NULL, chat_id INT NOT NULL, 'points' INT NOT NULL, 'timestamp' TEXT NOT NULL, 'term_id' TEXT NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_terms' ('chat_id' INT NOT NULL, 'term_id' TEXT NOT NULL, 'start_date' TEXT NOT NULL, 'end_date' TEXT NOT NULL, 'is_current' INT NOT NULL)")
+cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_past_winners' ('chat_id' INT NOT NULL, 'winning_house' TEXT NOT NULL, 'house_points_total' INT NOT NULL, 'house_champion' TEXT NOT NULL, 'champion_points_total' INT NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL, 'duration' INT, 'type' TEXT)")
+
 
 # HELPERS
 # Make timestamps pretty again
@@ -128,80 +130,9 @@ def pretty_date(time=False):
         return str(day_diff // 30) + " months ago"
     return str(day_diff // 365) + " years ago"
 
-# Define a few command handlers. These usually take the two arguments update and
-# context.
-def start(update: Update, context: CallbackContext) -> None:
-    """Send a message when the command /start is issued."""
-    chat_id = str(update.message.chat_id)
-    context.bot.send_message(chat_id, text="""*Don't Panic! I have a Towel!*
-
-*TRIGGERS*
-*=========================*
-_Add a new trigger:_
-/add triggerWord -> triggerResponse
-
-_Add a new GIF, Image or Sticker trigger:_
-/add triggerWord -> MEDIA 
-
-Note, MEDIA is case-insensitive.
-
-_Delete a trigger:_
-/del triggerWord
-
-_List triggers:_
-/list 
-_or_
-/listDetail
-_The latter will PM you a full list of all triggers and their responses. Note you must PM Marvin first and send a /start command to him._
-
-
-*HP REPUTATION SYSTEM*
-*=========================*
-_Add someone to their HP House:_
-/sortinghat @username <houseName>
-
-_List House Members:_
-/sortinghat
-_or_
-/sortinghat @username
-_The latter will return a single user, the former returns All users_
-
-_Give/Remove House Point:_
-Positive = +, ❤️, 😍, 👍
-Negative = -, 😡, 👎
-
-_Bulk Give/Remove House Point (Admin Only):_
-/points @username <pointsTotal>
-
-_Show current House and Champion Totals:_
-/points totals
-
-
-*ROLL DICE*
-*=========================*
-_Standard Roll_
-/roll
-
-_Custom Roll_
-/roll 2d8
-_The number 2 represents how many dice to roll, the number 8 represents how many sides each dice has._
-
-
-*GROUP GENERAL*
-*=========================*
-_Activity_
-/activity 
-_Shows users not active in the last two days_
-
-/activity full
-_Shows all users last activity_
-
-    
-    """, parse_mode='markdown')
-
-# /help functionality
-# Prompts the user to talk directly to the bot and issue the /start command which shows the full help context
-#
+# Help Functionality
+# /help prompts the user to talk directly to the bot and issue the /start command which shows the full help context
+# Contents of the help message sent to users is stored in helpText.txt
 def help_command(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /help is issued."""
     time = datetime.now()
@@ -212,9 +143,16 @@ def help_command(update: Update, context: CallbackContext) -> None:
     messageinfo = context.bot.send_message(chat_id, text="To get help, PM me  @" + user_detail[1].user.mention_markdown() + " and send me the Start or /start command", parse_mode='markdown')
     log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
 
-# /add functionality 
-# Creates a new trigger, invoked with /add trigger_word <separator> trigger_response
-# 
+def start(update: Update, context: CallbackContext) -> None:
+    """Send a message when the command /start is issued."""
+    chat_id = str(update.message.chat_id)
+    help_text = open('helpText.txt', encoding="utf8")
+    context.bot.send_message(chat_id, text=help_text.read(), parse_mode='markdown')
+
+# Trigger Functionality
+# Allows users to create automatic responses to specied keywords. Creation is via '/add triggerWord -> triggerResponse'
+# Deletion is via '/del triggerWord', a list of current triggers can be pulled via '/list' or '/listDetail which will PM the user.
+
 def add_trigger_command(update: Update, context: CallbackContext) -> None:
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
@@ -270,10 +208,6 @@ def save_trigger(chat_id,trigger_word,trigger_response,timestamp,context,trigger
         messageinfo = context.bot.send_message(chat_id, text="Trigger [" + trigger_word + "] created.")
         log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
 
-
-# /del functionality 
-# Removes any given trigger from a group. 
-# Invoked with /del <trigger_word>
 def del_trigger_command(update: Update, context: CallbackContext) -> None:
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
@@ -297,9 +231,6 @@ def del_trigger_command(update: Update, context: CallbackContext) -> None:
         messageinfo = context.bot.send_message(chat_id, text="Trigger not found.")
         log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
 
-# Checks if a trigger exists, if yes, returns the value
-# 
-# 
 def trigger_lookup(trigger_word, chat_id) -> None:
     select = cursor.execute("SELECT * from triggers WHERE trigger_word = ? AND chat_id = ?",(trigger_word,chat_id))
     rows = select.fetchall()
@@ -321,9 +252,6 @@ def trigger_lookup(trigger_word, chat_id) -> None:
         error = 'Something went wrong or trigger wasnt found'
         return 0, error
 
-# /list functionality 
-# Returns a simple list of all available triggers for a given group.
-# 
 def list_trigger_command(update: Update, context: CallbackContext) -> None:
     """Removes a trigger when the /list command is used"""
     chat_id = str(update.message.chat_id)
@@ -341,9 +269,6 @@ def list_trigger_command(update: Update, context: CallbackContext) -> None:
         context.bot.send_message(chat_id, text="Hmm, doesn't look like this group has any triggers yet!")
         return 0, error
 
-# /listDetail functionality 
-# Works similar to /list, however will also pull the trigger responses at the same time.
-# As this can be quite spammy, it sends the detail directly to the requestor rather than publishing in the group.
 def list_trigger_detail_command(update: Update, context: CallbackContext) -> None:
     """Sends a message to the requester with the full detail of all triggers"""
     chat_id = str(update.message.chat_id)
@@ -363,9 +288,11 @@ def list_trigger_detail_command(update: Update, context: CallbackContext) -> Non
         context.bot.send_message(chat_id, text="Hmm, doesn't look like this group has any triggers yet!")
         return 0, error
 
-# /activity Command
-# Returns a sorted list of recent user activity
-# User can optionally ask to filter by users who have not been active in X number of days with '/activity X' 
+# Activity Tracking Functionality
+# /activity Returns a sorted list of inactive users in the last 3 days. Activity is updated any time the user sends a text post to the group.
+# User can optionally request the full list of users with '/activity full' 
+# activity_lookup and activity_status_check are helper functions which are used elsewhere in Marvin
+
 def activity_command(update: Update, context: CallbackContext) -> None:
     """Pulls a list of users activity and sends to the group"""
     chat_id = str(update.message.chat_id)
@@ -410,9 +337,6 @@ def activity_command(update: Update, context: CallbackContext) -> None:
         context.bot.send_message(chat_id, text="It's a busy little group! Everybody has been active in the last 2 days. If you want the full chat list, use '/activity full'", parse_mode='markdown')
         return 0, error
 
-# User Status Check
-# Checks if a user is an active member of the group.
-# 
 def activity_status_check(user_id,chat_id,context: CallbackContext) -> None:
     try: 
         user_detail = context.bot.get_chat_member(chat_id,user_id)
@@ -428,9 +352,21 @@ def activity_status_check(user_id,chat_id,context: CallbackContext) -> None:
         user_detail = 'User not found.'
         return 0, user_detail
 
+def activity_lookup(user_id, chat_id) -> None:
+    select = cursor.execute("SELECT * from users WHERE user_id = ? AND chat_id = ?",(user_id,chat_id))
+    rows = select.fetchall()
+    if rows:
+        for row in rows:
+            if str(row[0]) == user_id and str(row[1]) == chat_id:
+                return 1,row[0]
+    else: 
+        error = 'Something went wrong or user activity entry was not found.'
+        return 0, error
+
 # Harry Potter House Functionality
-# User can either send a simple '/roll' command which will default to a single eight sided die or,
-# User can send a '/roll XDY' command where X = number of dice, D is the separator, Y = sides on each die. 
+# Points reputation system. Points are awarded with either +/- or via /points @username <pointsTotal>
+# Users are assigned to houses with /sortinghat @username <houseName>, and the current House list is pulled with just /sortinghat
+# Points are tracked on a 'term' basis where a term length is defined in your .env file. End of term notices and points reset are automatic.
 
 def hp_assign_house(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
@@ -514,7 +450,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
     else:
         context.bot.send_message(chat_id, text="You dare use my spells against me? You did it wrong anyway\. \n\n Sort someone into their house with:\n '/sortinghat @username <houseName>'\n\nHouse options are:\n Gryffindor, Slytherin, Hufflepuff, Ravenclaw, HouseElf", parse_mode='markdown')
 
-def hp_term_tracker(chat_id) -> None:
+def hp_term_tracker(chat_id, context) -> None:
     chat_id = chat_id
     time = datetime.now()
     time_plus = time + timedelta(days=int(TERMLENGTH))
@@ -524,15 +460,30 @@ def hp_term_tracker(chat_id) -> None:
     select = cursor.execute("SELECT * FROM hp_terms WHERE is_current = 1 AND chat_id = ?",(chat_id,))
     rows = select.fetchone()
     if rows:
+        term_id = rows[1]
         # Is the term still current?
         if timestamp_now < rows[3]:
             pass
         else:
-            # Pull back final totals
-            # Send results to group
-            # Update past winners?
+            # Pull back final totals & send results to group
+            term_id = rows[1]
+            term_end = rows[3]
+            results = hp_totals(chat_id, term_id, term_end, timestamp_now, context, "EndTerm")
+            # Update past winners
+            winning_house = results[0]
+            house_points_total = results[1]
+            house_champion = results[2]
+            champion_points_total = results[3]
+            select = cursor.execute("SELECT * FROM hp_past_winners WHERE chat_id = ?",(chat_id,))
+            rows = select.fetchone()
+            if rows:
+                cursor.execute("UPDATE hp_past_winners SET winning_house = ?, house_points_total = ?, house_champion = ?, champion_points_total = ? WHERE chat_id = ?",(winning_house,house_points_total,house_champion,champion_points_total,chat_id))
+                db.commit()
+            else: 
+                cursor.execute("INSERT INTO hp_past_winners (chat_id,winning_house,house_points_total,house_champion,champion_points_total) VALUES(?,?,?,?,?)",(chat_id,winning_house,house_points_total,house_champion,champion_points_total))
+                db.commit()
             # Close old term
-            cursor.execute("UPDATE hp_terms SET is_current = ? WHERE chat_id = ? AND term_id = ?",(0,chat_id, rows[1]))
+            cursor.execute("UPDATE hp_terms SET is_current = ? WHERE chat_id = ? AND term_id = ?",(0,chat_id, term_id))
             # Start new term
             cursor.execute("INSERT INTO hp_terms (chat_id, term_id, start_date, end_date, is_current) VALUES(?,?,?,?,1)",(chat_id,str(uuid.uuid4()),timestamp_now,timestamp_plus))
             db.commit()
@@ -617,7 +568,6 @@ def hp_points(update,context,chat_id,timestamp) -> None:
         messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has deducted " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown' )
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
 
-
 def hp_points_admin(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     chat_id = update.message.chat_id
@@ -696,113 +646,151 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
         # Fetch House Totals and House Champions
         command = update.message.text.split()
         if command[1] == 'totals':
-            points_Gryffindor = 0
-            points_Slytherin = 0
-            points_Hufflepuff = 0
-            points_Ravenclaw = 0
-            points_Houseelf = 0
-            points_Muggles = 0
-
-            # Grab the points totals for the current term
-            select = cursor.execute("SELECT * FROM hp_points WHERE chat_id = ? AND term_id = ?",(chat_id,term_id))
-            rows = select.fetchall()
-            if rows:
-                for row in rows:
-                    user_detail = activity_status_check(row[0],chat_id,context)
-                    user_status = (context.bot.get_chat_member(chat_id,user_detail[1].user.id)).status
-                    if user_status in ("member","creator","administrator"):
-                        user_house = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? AND user_id = ?",(chat_id,user_detail[1].user.id))
-                        user_house = user_house.fetchone()
-                        user_points = row[2]
-
-                        if user_house[0] == "Gryffindor":
-                            points_Gryffindor += user_points
-                        elif user_house[0] == "Slytherin":
-                            points_Slytherin += user_points
-                        elif user_house[0] == "Hufflepuff":
-                            points_Hufflepuff += user_points
-                        elif user_house[0] == "Ravenclaw":
-                            points_Ravenclaw += user_points
-                        elif user_house[0] == "Houseelf":
-                            points_Houseelf += user_points
-                        else: 
-                            points_Muggles += user_points
-                    else: 
-                        cursor.execute("UPDATE users SET status = 'left' WHERE user_id = ? AND chat_id = ?",(str(user_detail[1].user.id),chat_id))
-                        db.commit()
-
-
-                # Create points list, sort it, format it.
-                points_list = {"🦁 : ": points_Gryffindor, "🐍 : ": points_Slytherin, "🦡 : ": points_Hufflepuff, "🦅 : ": points_Ravenclaw, "🧝‍♀️ : ": points_Houseelf}
-                points_list = dict(sorted(points_list.items(), key=lambda item: item[1], reverse=True))
-                sentenceHouse = ""
-
-                for key, value in points_list.items():
-                    sentenceHouse += key + str(value) + "\n"
-
-                # Get House Champion for each House
-                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Gryffindor' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
-                rows = select.fetchone()
-                if rows:
-                    gryffindor_points = f"({rows[2]})"
-                    gryffindor_user_detail = activity_status_check(rows[0],rows[3],context)
-                    gryffindor_sentence = gryffindor_user_detail[1].user.mention_markdown()
-                else:
-                    gryffindor_points = " "
-                    gryffindor_sentence = "Nobody yet!" 
-
-                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Slytherin' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
-                rows = select.fetchone()
-                if rows:
-                    slytherin_points = f"({rows[2]})"
-                    slytherin_user_detail = activity_status_check(rows[0],rows[3],context)
-                    slytherin_sentence = slytherin_user_detail[1].user.mention_markdown()
-                else: 
-                    slytherin_points = " "
-                    slytherin_sentence = "Nobody yet!" 
-
-                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Hufflepuff' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
-                rows = select.fetchone()
-                if rows:
-                    hufflepuff_points = f"({rows[2]})"
-                    hufflepuff_user_detail = activity_status_check(rows[0],rows[3],context)
-                    hufflepuff_sentence = hufflepuff_user_detail[1].user.mention_markdown()
-                else: 
-                    hufflepuff_points = " "
-                    hufflepuff_sentence = "Nobody yet!" 
-
-                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Ravenclaw' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
-                rows = select.fetchone()
-                if rows:
-                    ravenclaw_points = f"({rows[2]})"
-                    ravenclaw_user_detail = activity_status_check(rows[0],rows[3],context)
-                    ravenclaw_sentence = ravenclaw_user_detail[1].user.mention_markdown()
-                else: 
-                    ravenclaw_points = " "
-                    ravenclaw_sentence = "Nobody yet!" 
-
-                select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Houseelf' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
-                rows = select.fetchone()
-                if rows:
-                    houseelf_points = f"({rows[2]})"
-                    houseelf_user_detail = activity_status_check(rows[0],rows[3],context)
-                    houseelf_sentence = houseelf_user_detail[1].user.mention_markdown()
-                else: 
-                    houseelf_points = " "
-                    houseelf_sentence = "Nobody yet!" 
-
-                # Finished, send message to users
-                messageinfo = context.bot.send_message(chat_id, text=f"🏰 *House Points Totals* 🏰\n{sentenceHouse}\nPoints wasted by Filthy Muggles: {points_Muggles}\n\n⚔️*Current House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_points}\n🐍: {slytherin_sentence} {slytherin_points}\n🦡: {hufflepuff_sentence} {hufflepuff_points}\n🦅: {ravenclaw_sentence} {ravenclaw_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_points}\n\n*This term ends in{prettyDate}*", parse_mode="Markdown")
-                log_bot_message(messageinfo.message_id,chat_id,timestamp,9000)
-
-            else: 
-                messageinfo = context.bot.send_message(chat_id, text="It appears nobody has earned any points this term!")
-                log_bot_message(messageinfo.message_id,chat_id,timestamp)
+            hp_totals(chat_id, term_id, term_end, timestamp, context)
         else:
             messageinfo = context.bot.send_message(chat_id, text="Admin Only: \n/points @username <pointsTotal>\n\nAll Users:\n/points totals")
             log_bot_message(messageinfo.message_id,chat_id,timestamp)
     else: 
         messageinfo = context.bot.send_message(chat_id, text="Admin Only: \n/points @username <pointsTotal>\n\nAll Users:\n/points totals")
+        log_bot_message(messageinfo.message_id,chat_id,timestamp)
+
+def hp_totals(chat_id, term_id, term_end, timestamp, context, query_type="Standard") -> None:
+    term_endObject = datetime.strptime(term_end, '%Y-%m-%d %H:%M:%S')
+    prettyDate = pretty_date(term_endObject)
+
+    points_Gryffindor = 0
+    points_Slytherin = 0
+    points_Hufflepuff = 0
+    points_Ravenclaw = 0
+    points_Houseelf = 0
+    points_Muggles = 0
+
+    # Grab the points totals for the current term
+    select = cursor.execute("SELECT * FROM hp_points WHERE chat_id = ? AND term_id = ?",(chat_id,term_id))
+    rows = select.fetchall()
+    if rows:
+        for row in rows:
+            user_detail = activity_status_check(row[0],chat_id,context)
+            user_status = (context.bot.get_chat_member(chat_id,user_detail[1].user.id)).status
+            if user_status in ("member","creator","administrator"):
+                user_house = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? AND user_id = ?",(chat_id,user_detail[1].user.id))
+                user_house = user_house.fetchone()
+                user_points = row[2]
+
+                if user_house[0] == "Gryffindor":
+                    points_Gryffindor += user_points
+                elif user_house[0] == "Slytherin":
+                    points_Slytherin += user_points
+                elif user_house[0] == "Hufflepuff":
+                    points_Hufflepuff += user_points
+                elif user_house[0] == "Ravenclaw":
+                    points_Ravenclaw += user_points
+                elif user_house[0] == "Houseelf":
+                    points_Houseelf += user_points
+                else: 
+                    points_Muggles += user_points
+            else: 
+                cursor.execute("UPDATE users SET status = 'left' WHERE user_id = ? AND chat_id = ?",(str(user_detail[1].user.id),chat_id))
+                db.commit()
+
+
+        # Create points list, sort it, format it.
+        points_list = {"🦁 : ": points_Gryffindor, "🐍 : ": points_Slytherin, "🦡 : ": points_Hufflepuff, "🦅 : ": points_Ravenclaw, "🧝‍♀️ : ": points_Houseelf}
+        points_list = dict(sorted(points_list.items(), key=lambda item: item[1], reverse=True))
+        sentenceHouse = ""
+
+        for key, value in points_list.items():
+            sentenceHouse += key + str(value) + "\n"
+
+        # Get House Champion for each House
+        select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Gryffindor' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
+        rows = select.fetchone()
+        if rows:
+            gryffindor_points = f"({rows[2]})"
+            gryffindor_user_detail = activity_status_check(rows[0],rows[3],context)
+            gryffindor_sentence = gryffindor_user_detail[1].user.mention_markdown()
+        else:
+            gryffindor_points = " "
+            gryffindor_sentence = "Nobody yet!" 
+
+        select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Slytherin' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
+        rows = select.fetchone()
+        if rows:
+            slytherin_points = f"({rows[2]})"
+            slytherin_user_detail = activity_status_check(rows[0],rows[3],context)
+            slytherin_sentence = slytherin_user_detail[1].user.mention_markdown()
+        else: 
+            slytherin_points = " "
+            slytherin_sentence = "Nobody yet!" 
+
+        select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Hufflepuff' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
+        rows = select.fetchone()
+        if rows:
+            hufflepuff_points = f"({rows[2]})"
+            hufflepuff_user_detail = activity_status_check(rows[0],rows[3],context)
+            hufflepuff_sentence = hufflepuff_user_detail[1].user.mention_markdown()
+        else: 
+            hufflepuff_points = " "
+            hufflepuff_sentence = "Nobody yet!" 
+
+        select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Ravenclaw' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
+        rows = select.fetchone()
+        if rows:
+            ravenclaw_points = f"({rows[2]})"
+            ravenclaw_user_detail = activity_status_check(rows[0],rows[3],context)
+            ravenclaw_sentence = ravenclaw_user_detail[1].user.mention_markdown()
+        else: 
+            ravenclaw_points = " "
+            ravenclaw_sentence = "Nobody yet!" 
+
+        select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Houseelf' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
+        rows = select.fetchone()
+        if rows:
+            houseelf_points = f"({rows[2]})"
+            houseelf_user_detail = activity_status_check(rows[0],rows[3],context)
+            houseelf_sentence = houseelf_user_detail[1].user.mention_markdown()
+        else: 
+            houseelf_points = " "
+            houseelf_sentence = "Nobody yet!" 
+
+        # Finished, send message to users
+        if query_type == "Standard":
+            # Get last terms winner
+            select = cursor.execute("SELECT * FROM hp_past_winners WHERE chat_id = ?",(chat_id,))
+            rows = select.fetchone()
+            if rows:
+                messageinfo = context.bot.send_message(chat_id, text=f"🏰 *House Points Totals* 🏰\n{sentenceHouse}\nPoints wasted by Filthy Muggles: {points_Muggles}\n\n⚔️*Current House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_points}\n🐍: {slytherin_sentence} {slytherin_points}\n🦡: {hufflepuff_sentence} {hufflepuff_points}\n🦅: {ravenclaw_sentence} {ravenclaw_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_points}\n\n*Last Terms Winning House & Champion:*\n{rows[1]}\n{rows[3]} with {rows[4]} points!\n\n*This term ends in{prettyDate}*", parse_mode="Markdown")
+            else:
+                messageinfo = context.bot.send_message(chat_id, text=f"🏰 *House Points Totals* 🏰\n{sentenceHouse}\nPoints wasted by Filthy Muggles: {points_Muggles}\n\n⚔️*Current House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_points}\n🐍: {slytherin_sentence} {slytherin_points}\n🦡: {hufflepuff_sentence} {hufflepuff_points}\n🦅: {ravenclaw_sentence} {ravenclaw_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_points}\n\n*This term ends in{prettyDate}*", parse_mode="Markdown")
+        # If End of Term do other stuff
+        elif query_type == "EndTerm":
+            house_champion_points = list(points_list.values())[0]
+            if list(points_list)[0] == "🦁 : ":
+                house_champion = "🦁 Gryffindor! 🦁"
+                house_champion_user = gryffindor_user_detail[1].user.mention_markdown()
+                house_champion_points = gryffindor_points
+            elif list(points_list)[0] == "🐍 : ":
+                house_champion = "🐍 Slytherin! 🐍"
+                house_champion_user = slytherin_user_detail[1].user.mention_markdown()
+                house_champion_points = slytherin_points
+            elif list(points_list)[0] == "🦡 : ":
+                house_champion = "🦡 Hufflepuff! 🦡"
+                house_champion_user = hufflepuff_user_detail[1].user.mention_markdown()
+                house_champion_points = hufflepuff_points
+            elif list(points_list)[0] == "🦅 : ":
+                house_champion = "🦅 Ravenclaw! 🦅"
+                house_champion_user = ravenclaw_user_detail[1].user.mention_markdown()
+                house_champion_points = ravenclaw_points
+            elif list(points_list)[0] == "🧝‍♀️ : ":
+                house_champion = "🧝‍♀️ House Elves! 🧝‍♀️"
+                house_champion_user = houseelf_user_detail[1].user.mention_markdown()
+                house_champion_points = houseelf_points
+            messageinfo = context.bot.send_message(chat_id, text=f"✨✨✨ *END OF TERM!* ✨✨✨\n\nThe winner of this terms House Cup with a total of *{house_champion_points} points* ...\n\n{house_champion}\n\nAlso a huge congratulations to each of this terms ... \n\n⚔️*House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_points}\n🐍: {slytherin_sentence} {slytherin_points}\n🦡: {hufflepuff_sentence} {hufflepuff_points}\n🦅: {ravenclaw_sentence} {ravenclaw_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_points}\n\n*Points have been reset and a new term has begun!*", parse_mode="Markdown")
+            context.bot.pin_chat_message(chat_id,messageinfo.message_id)
+            return house_champion, house_champion_points, house_champion_user, house_champion_points
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,9000)
+    else: 
+        messageinfo = context.bot.send_message(chat_id, text="It appears nobody has earned any points this term!")
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
 
 def hp_tags(update: Update, context: CallbackContext) -> None:
@@ -897,7 +885,7 @@ def roll_command(update: Update, context: CallbackContext) -> None:
 
 # Passive chat polling 
 # Processes each message received in any groups where the Bot is active
-# Feeds into the Trigger and Activity functionality
+# 
 def chat_polling(update: Update, context: CallbackContext) -> None:
     if update.message.chat_id:      
         chat_id = str(update.message.chat_id)
@@ -940,7 +928,7 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     else:
         frequency_count += 1
 
-    hp_term_tracker(chat_id)
+    hp_term_tracker(chat_id, context)
     # Check if message is a a reply
     if update.message.reply_to_message:
         if not update.message.reply_to_message.from_user.is_bot:
@@ -948,7 +936,6 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
         else:
             pass # replying to Marvin with text, does nothing.
     del_bot_message(chat_id, context)
-
 
 def marvin_personality() -> None:
     json_file = open("Sass.json")
@@ -974,7 +961,7 @@ def chat_media_polling(update: Update, context: CallbackContext) -> None:
         trigger_type = "sticker"
     else:
         print("Received a file type I'm not familiar with")
-        print(update.message)
+        #print(update.message)
     
     # If this is a response to a Marvin service message, check if we need to save a trigger
     if update.message.reply_to_message:
@@ -995,20 +982,6 @@ def chat_media_polling(update: Update, context: CallbackContext) -> None:
                 pass
         else:
             pass # replying to a User with images etc, does nothing.
-
-# Activity Lookup function
-# Checks if user has been logged to the DB previously
-# 
-def activity_lookup(user_id, chat_id) -> None:
-    select = cursor.execute("SELECT * from users WHERE user_id = ? AND chat_id = ?",(user_id,chat_id))
-    rows = select.fetchall()
-    if rows:
-        for row in rows:
-            if str(row[0]) == user_id and str(row[1]) == chat_id:
-                return 1,row[0]
-    else: 
-        error = 'Something went wrong or user activity entry was not found.'
-        return 0, error
 
 # Original Code below here
 def main() -> None:
