@@ -82,8 +82,9 @@ cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_points' ('user_id' INTEGER NOT NU
 cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_terms' ('chat_id' INT NOT NULL, 'term_id' TEXT NOT NULL, 'start_date' TEXT NOT NULL, 'end_date' TEXT NOT NULL, 'is_current' INT NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL, 'duration' INT, 'type' TEXT)")
 
-
+# HELPERS
 # Make timestamps pretty again
+#
 def pretty_date(time=False):
     """
     Get a datetime object or a int() Epoch timestamp and return a
@@ -198,6 +199,9 @@ _Shows all users last activity_
     
     """, parse_mode='markdown')
 
+# /help functionality
+# Prompts the user to talk directly to the bot and issue the /start command which shows the full help context
+#
 def help_command(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /help is issued."""
     time = datetime.now()
@@ -895,7 +899,6 @@ def roll_command(update: Update, context: CallbackContext) -> None:
 # Processes each message received in any groups where the Bot is active
 # Feeds into the Trigger and Activity functionality
 def chat_polling(update: Update, context: CallbackContext) -> None:
-    print(update)
     if update.message.chat_id:      
         chat_id = str(update.message.chat_id)
     elif update.message.chat.id:
@@ -905,7 +908,8 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     user_status = (context.bot.get_chat_member(chat_id,user_id)).status
     username = context.bot.get_chat_member(chat_id,user_id).user.username
     time = datetime.now()
-    timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
+    timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S")) 
+    print(f"\033[1mTime:\033[0m {timestamp}\033[1m User:\033[0m {username} \033[1mGroup Name:\033[0m {update.message.chat.title} \033[1mGroup ID: \033[0m{update.message.chat.id} \n{chat_text}")
     
     # Lookup to check if text is a trigger - send trigger message to group.
     lookup = trigger_lookup(chat_text.lower(), chat_id)
