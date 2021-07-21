@@ -897,7 +897,7 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     username = context.bot.get_chat_member(chat_id,user_id).user.username
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S")) 
-    print(f"\033[1mTime:\033[0m {timestamp}\033[1m User:\033[0m {username} \033[1mGroup Name:\033[0m {update.message.chat.title} \033[1mGroup ID: \033[0m{update.message.chat.id} \n{chat_text}")
+    print(f"\033[1mTime:\033[0m {timestamp} \033[1mGroup Name:\033[0m {update.message.chat.title} \033[1mGroup ID: \033[0m{update.message.chat.id} \033[1m User:\033[0m {username} \n{chat_text} ")
     
     # Lookup to check if text is a trigger - send trigger message to group.
     lookup = trigger_lookup(chat_text.lower(), chat_id)
