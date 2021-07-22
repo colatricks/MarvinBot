@@ -63,7 +63,7 @@ frequency_count = 0
 frequency_total = 400 # how many messages are sent before Marvin 'speaks'
 
 # HP Character Appearance Counter, how many messages until a character appears
-character_count = 490
+character_count = 140
 character_total = 500
 random_char = 1
 
@@ -839,8 +839,8 @@ def hp_character_appearance(chat_id,update,context,timestamp,term_id,user=False)
                     print('Trelawney')
                 elif row[5] == "Umbridge":
                     print('Umbridge')
-                elif row[5] == "Felix":
-                    print('Felix')
+                elif row[5] == "Slughorn":
+                    print('Slughorn')
 
             else:
                 # Message no longer exists, do nothing (or maybe let the user know? Not sure yet.)
@@ -860,7 +860,7 @@ def hp_random_character(chat_id,context,update,timestamp,term_id) -> None:
         elif sticker.emoji == "😒":
             snape_file_id = sticker.file_id 
         elif sticker.emoji == "😜":
-            felix_file_id = sticker.file_id 
+            slughorn_file_id = sticker.file_id 
         elif sticker.emoji == "🤔":
             filch_file_id = sticker.file_id 
         elif sticker.emoji == "🔮":
@@ -909,11 +909,11 @@ def hp_random_character(chat_id,context,update,timestamp,term_id) -> None:
         messageinfo = context.bot.send_message(chat_id, text="*Dolores Umbridge thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + "* is a Muggle-Born!*\n\nShe deducts 2 points from them!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
         log_bot_message(messageinfo.message_id,chat_id,timestamp,3600,"Umbridge")
     elif random_char == 5:
-        # Felix Felicis
+        # Slughorn
         current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"positive",2,"from_admin",update,context,None,receiverHouse)
-        context.bot.send_sticker(chat_id, sticker=felix_file_id, reply_to_message_id=most_recent_message_id)
-        messageinfo = context.bot.send_message(chat_id, text="*Felix Felicis thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " *looks lucky today!*\n\nHe awards them 2 points!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
-        log_bot_message(messageinfo.message_id,chat_id,timestamp,3600,"Felix")
+        context.bot.send_sticker(chat_id, sticker=slughorn_file_id, reply_to_message_id=most_recent_message_id)
+        messageinfo = context.bot.send_message(chat_id, text="*Professor Slughorn thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " *looks lucky today!*\n\nHe awards them 2 points!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,3600,"Slughorn")
 
 def hp_character_appearance_counter(chat_id,update,context,term_id,timestamp) -> None:
     global character_count
