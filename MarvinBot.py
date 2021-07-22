@@ -63,8 +63,8 @@ frequency_count = 0
 frequency_total = 400 # how many messages are sent before Marvin 'speaks'
 
 # HP Character Appearance Counter, how many messages until a character appears
-character_count = 0
-character_total = 5
+character_count = 490
+character_total = 500
 random_char = 1
 
 # END USER CONFIGURATION 
@@ -814,7 +814,6 @@ def hp_character_appearance(chat_id,update,context,timestamp,term_id,user=False)
             # Check if Message ID is still valid
             select = cursor.execute("SELECT * FROM bot_service_messages WHERE chat_id = ? AND message_id = ?",(chat_id,reply_message_id))
             row = select.fetchone()
-            print(row)
             if row:
                 # Message exists
                 # Which game is it related to?
@@ -1055,7 +1054,6 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
 
     hp_character_appearance_counter(chat_id,update,context,term_id,timestamp)            
     del_bot_message(chat_id, context)
-
 
 def marvin_personality() -> None:
     json_file = open("Sass.json")
