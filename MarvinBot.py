@@ -62,6 +62,10 @@ separator = '->'
 frequency_count = 0
 frequency_total = 400 # how many messages are sent before Marvin 'speaks'
 
+# HP Character Appearance Counter, how many messages until a character appears
+character_count = 0
+character_total = 5
+random_char = 1
 
 # END USER CONFIGURATION 
 
@@ -494,6 +498,26 @@ def hp_term_tracker(chat_id, context) -> None:
         # First ever term!
         cursor.execute("INSERT INTO hp_terms (chat_id, term_id, start_date, end_date, is_current) VALUES(?,?,?,?,1)",(chat_id,str(uuid.uuid4()),timestamp_now,timestamp_plus))
         db.commit()
+    
+    return term_id
+
+def hp_get_user_house(chat_id,user_id) -> None:
+    select = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? and user_id = ?",(chat_id,user_id))
+    user = select.fetchone()
+    if user[0] == "Gryffindor":
+        house = "🦁"
+    elif user[0] == "Slytherin":
+        house = "🐍"
+    elif user[0] == "Hufflepuff":
+        house = "🦡"
+    elif user[0] == "Ravenclaw":
+        house = "🦅"
+    elif user[0] == "Houseelf":
+        house = "🧝‍♀️"
+    else: 
+        house = "❌"
+    
+    return house
 
 def hp_points(update,context,chat_id,timestamp) -> None:
     # Get Current Term
@@ -506,67 +530,41 @@ def hp_points(update,context,chat_id,timestamp) -> None:
     to_user_id = update.message.reply_to_message.from_user.id
     from_user_id = update.message.from_user.id
 
+    # Get Sender & Target Users House
+    senderHouse = hp_get_user_house(chat_id,from_user_id)
+    receiverHouse = hp_get_user_house(chat_id,to_user_id)
+
+    # Check if message was positive or not
+    if update.message.text in positive:
+        hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"positive",1,"from_user",update,context,senderHouse,receiverHouse)
+    elif update.message.text in negative:
+        hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"negative",-1,"from_user",update,context,senderHouse,receiverHouse)
+
+def hp_allocate_points(chat_id,timestamp,to_user_id,term_id,positive_negative,points_allocated,from_who,update,context,senderHouse=None,receiverHouse=None) -> None:
 
     # Get Current Points
     select = cursor.execute("SELECT points FROM hp_points WHERE chat_id = ? AND term_id = ? and user_id = ?",(chat_id,term_id,to_user_id))
     rows = select.fetchone()
 
-    # Get Sender & Target Users House
-    sender = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? and user_id = ?",(chat_id,from_user_id))
-    sender = sender.fetchone()
-    if sender[0] == "Gryffindor":
-        senderHouse = "🦁"
-    elif sender[0] == "Slytherin":
-        senderHouse = "🐍"
-    elif sender[0] == "Hufflepuff":
-        senderHouse = "🦡"
-    elif sender[0] == "Ravenclaw":
-        senderHouse = "🦅"
-    elif sender[0] == "Houseelf":
-        senderHouse = "🧝‍♀️"
-    else: 
-        senderHouse = "❌"
 
-    receiver = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? and user_id = ?",(chat_id,to_user_id))
-    receiver = receiver.fetchone()
-    if receiver[0] == "Gryffindor":
-        receiverHouse = "🦁"
-    elif receiver[0] == "Slytherin":
-        receiverHouse = "🐍"
-    elif receiver[0] == "Hufflepuff":
-        receiverHouse = "🦡"
-    elif receiver[0] == "Ravenclaw":
-        receiverHouse = "🦅"
-    elif receiver[0] == "Houseelf":
-        receiverHouse = "🧝‍♀️"
+    if rows:
+        current_points = rows[0]
+        current_points += points_allocated
+        cursor.execute("UPDATE hp_points SET points = ?, timestamp = ? WHERE user_id = ? AND chat_id = ? AND term_id = ?",(current_points,timestamp,to_user_id,chat_id,term_id))
+        db.commit()
     else: 
-        receiverHouse = "❌"
-
-    # Check if message was positive or not
-    if update.message.text in positive:
-        if rows:
-            current_points = rows[0]
-            current_points += 1
-            cursor.execute("UPDATE hp_points SET points = ?, timestamp = ? WHERE user_id = ? AND chat_id = ? AND term_id = ?",(current_points,timestamp,to_user_id,chat_id,term_id))
-            db.commit()
-        else: 
-            current_points = 1    
-            cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(to_user_id,chat_id,current_points,timestamp,term_id))
-            db.commit()
+        current_points = points_allocated    
+        cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(to_user_id,chat_id,current_points,timestamp,term_id))
+        db.commit()
+    
+    if from_who == "from_user" and positive_negative == "positive":
         messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown')
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
-    elif update.message.text in negative:
-        if rows:
-            current_points = rows[0]
-            current_points -= 1
-            cursor.execute("UPDATE hp_points SET points = ?, timestamp = ? WHERE user_id = ? AND chat_id = ? AND term_id = ?",(current_points,timestamp,to_user_id,chat_id,term_id))
-            db.commit()
-        else: 
-            current_points = -1    
-            cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(to_user_id,chat_id,current_points,timestamp,term_id))
-            db.commit()
+    elif from_who == "from_user" and positive_negative == "negative":
         messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has deducted " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown' )
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
+    
+    return current_points
 
 def hp_points_admin(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
@@ -596,44 +594,22 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
                 messageinfo = context.bot.send_message(chat_id, text="Stupefy! Stop right there. The Ministry of Magic has mandated no more than 20 points can be deducted at a time!")
                 log_bot_message(messageinfo.message_id,chat_id,timestamp)
             else: 
-
                 select = cursor.execute("SELECT * FROM users WHERE username = ? COLLATE NOCASE AND chat_id = ?",(command[1][1:],chat_id))
                 rows = select.fetchone()
                 if rows:
                     user_detail = activity_status_check(rows[0],rows[1],context)
-                    if rows[4] == "Gryffindor":
-                        receiverHouse = "🦁"
-                    elif rows[4] == "Slytherin":
-                        receiverHouse = "🐍"
-                    elif rows[4] == "Hufflepuff":
-                        receiverHouse = "🦡"
-                    elif rows[4] == "Ravenclaw":
-                        receiverHouse = "🦅"
-                    elif rows[4] == "Houseelf":
-                        receiverHouse = "🧝‍♀️"
-                    else: 
-                        receiverHouse = "❌"
+                    receiverHouse = hp_get_user_house(chat_id,user_detail[1].user.id)
 
-                    # Get Current Points
-                    select = cursor.execute("SELECT points FROM hp_points WHERE chat_id = ? AND term_id = ? and user_id = ?",(chat_id,term_id,user_detail[1].user.id))
-                    rows = select.fetchone()
-                    if rows:
-                        current_points = rows[0]
-                        current_points = int(current_points) + int(command[2])
-                        cursor.execute("UPDATE hp_points SET points = ?, timestamp = ? WHERE user_id = ? AND chat_id = ? AND term_id = ?",(current_points,timestamp,user_detail[1].user.id,chat_id,term_id))
-                        db.commit()
-                    else: 
-                        current_points = command[2]    
-                        cursor.execute("INSERT INTO hp_points (user_id, chat_id, points, timestamp, term_id) VALUES(?,?,?,?,?)",(user_detail[1].user.id,chat_id,current_points,timestamp,term_id))
-                        db.commit()
-                    
+                    # Get Current Points                   
                     if int(command[2]) > 0:
+                        current_points = hp_allocate_points(chat_id,timestamp,user_detail[1].user.id,term_id,"positive",int(command[2]),"from_admin",update,context,None,receiverHouse)
                         messageinfo = context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " of " + receiverHouse + " has been awarded " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points),parse_mode='markdown' )
                         log_bot_message(messageinfo.message_id,chat_id,timestamp)
                     elif int(command[2]) == 0:
-                        messageinfo = context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " of " + receiverHouse + " has been um ... awarded no extra House points.\nTheir new total for this Term is: " + str(current_points),parse_mode='markdown' )
+                        messageinfo = context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " of " + receiverHouse + " has been um ... awarded no extra House points.",parse_mode='markdown' )
                         log_bot_message(messageinfo.message_id,chat_id,timestamp)
                     else:
+                        current_points = hp_allocate_points(chat_id,timestamp,user_detail[1].user.id,term_id,"negative",int(command[2]),"from_admin",update,context,None,receiverHouse)
                         messageinfo = context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " of " + receiverHouse + " has been deducted " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points),parse_mode='markdown' )
                         log_bot_message(messageinfo.message_id,chat_id,timestamp)
                 else: 
@@ -824,9 +800,143 @@ def hp_tags(update: Update, context: CallbackContext) -> None:
         messageinfo = context.bot.send_message(chat_id, text="Yer not a Wizard Harry ... or ... an Admin ... " + user_detail[1].user.mention_markdown(), parse_mode='markdown')
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
 
-def log_bot_message(message_id, chat_id, timestamp, duration = standard_duration, type = "Standard") -> None:
-    cursor.execute("INSERT INTO bot_service_messages (message_id, chat_id, created_date, status, duration, type) VALUES(?,?,?,'sent',?,?)",(message_id, chat_id, timestamp, duration, type))
-    db.commit()
+def hp_character_appearance(chat_id,update,context,timestamp,term_id,user=False) -> None:
+
+    if user == False:
+        hp_random_character(chat_id,context,update,timestamp,term_id)
+
+    elif user == True:
+        if update.message.reply_to_message:
+            receiverHouse = hp_get_user_house(chat_id,update.message.from_user.id)
+            chat_text = update.message.text
+            reply_message_id = update.message.reply_to_message.message_id
+
+            # Check if Message ID is still valid
+            select = cursor.execute("SELECT * FROM bot_service_messages WHERE chat_id = ? AND message_id = ?",(chat_id,reply_message_id))
+            row = select.fetchone()
+            print(row)
+            if row:
+                # Message exists
+                # Which game is it related to?
+                if row[5] == "Snitch":
+                    if chat_text.lower() == "caught it!" and row[3] == "open":
+                        current_points = hp_allocate_points(chat_id,timestamp,update.message.from_user.id,term_id,"positive",20,"from_admin",update,context,None,receiverHouse)
+                        context.bot.send_message(chat_id, text="🥇 " + update.message.from_user.mention_markdown() + " *of " + receiverHouse + " caught the Golden Snitch!* 🥇\n\nThey have received 20 points.\n\nTheir new total for this term is " + str(current_points), parse_mode='markdown')
+                        cursor.execute("UPDATE bot_service_messages SET status = ? WHERE chat_id = ? AND message_id = ?",("closed",chat_id,reply_message_id))
+                        db.commit()
+                    elif row[3] == "closed":
+                        messageinfo = context.bot.send_message(chat_id, text="Looks like you could use a Nimbus 2000 " + update.message.from_user.mention_markdown() + "\n\nThis Snitch has already been caught!", parse_mode='markdown')
+                        log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
+                    else: 
+                        messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + "leaps for the Golden Snitch and ... falls on their keyboard with a typo!", parse_mode='markdown')
+                        log_bot_message(messageinfo.message_id,chat_id,timestamp,short_duration)
+                elif row[5] == "Snape":
+                    # All of Snapes logic exists in hp_random_character()
+                    pass
+                elif row[5] == "Filch":
+                    print('Filch')
+                elif row[5] == "Trelawney":
+                    # All of Trelawneys logic exists in hp_random_character()
+                    print('Trelawney')
+                elif row[5] == "Umbridge":
+                    print('Umbridge')
+                elif row[5] == "Felix":
+                    print('Felix')
+
+            else:
+                # Message no longer exists, do nothing (or maybe let the user know? Not sure yet.)
+                pass
+
+def hp_random_character(chat_id,context,update,timestamp,term_id) -> None:
+    total_characters = 5
+    random_char = random.randint(1, total_characters)
+
+    # Get the sticker set to pull associated file_id's
+    # Might need to store these in the DB eventually, will see how quick/slow it is.
+
+    sticker_set = context.bot.get_sticker_set("BoyWhoLived")
+    for sticker in sticker_set.stickers:
+        if sticker.emoji == "✊️":
+            snitch_file_id = sticker.file_id 
+        elif sticker.emoji == "😒":
+            snape_file_id = sticker.file_id 
+        elif sticker.emoji == "😜":
+            felix_file_id = sticker.file_id 
+        elif sticker.emoji == "🤔":
+            filch_file_id = sticker.file_id 
+        elif sticker.emoji == "🔮":
+            trelawney_file_id = sticker.file_id 
+        elif sticker.emoji == "😁":
+            umbridge_file_id = sticker.file_id 
+
+    # Get Most Recent Message ID
+    select = cursor.execute("SELECT * FROM bot_service_messages WHERE chat_id = ? AND type = ?",(chat_id,"MostRecent"))
+    row = select.fetchone()
+    if row:
+        most_recent_message_id = row[1]
+        most_recent_user_id = row[3]
+        receiverHouse = hp_get_user_house(chat_id,most_recent_user_id)
+    user_detail = activity_status_check(most_recent_user_id,chat_id,context)
+
+    if random_char == 1:
+        # Golden Snitch Game
+        # Reply logic for Snitch game is in hp_character_appearance()
+        messageinfo = context.bot.send_sticker(chat_id, sticker=snitch_file_id)
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,3600,"Snitch_Sticker","open")
+        messageinfo = context.bot.send_message(chat_id, text="*Quick!\n\nThe Golden Snitch just flew past your head!*\n\n_Reply to this message_ with '*CAUGHT IT!*' to catch it!", parse_mode='markdown')
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,3600,"Snitch","open")
+    elif random_char == 2:
+        # Snape Unimpressed
+        current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"negative",-10,"from_admin",update,context,None,receiverHouse)
+        context.bot.send_sticker(chat_id, sticker=snape_file_id, reply_to_message_id=most_recent_message_id)
+        messageinfo = context.bot.send_message(chat_id, text="*Professor Snape is unimpressed!\n\n*He deducts 10 points from " + user_detail[1].user.mention_markdown() + "of " + receiverHouse + "\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,3600,"Snape")
+    elif random_char == 3:
+        # Trelawney
+        # Get Random User ID for Trelawney because she's a bit weird
+        select = cursor.execute("SELECT * FROM users WHERE chat_id = ? AND status NOT IN ('kicked','left') ORDER BY RANDOM() LIMIT 1",(chat_id,))
+        row = select.fetchone()
+        if row:
+            random_user_id = row[0]
+            user_detail = activity_status_check(random_user_id,chat_id,context)
+        current_points = hp_allocate_points(chat_id,timestamp,random_user_id,term_id,"positive",10,"from_admin",update,context,None,receiverHouse)
+        context.bot.send_sticker(chat_id, sticker=trelawney_file_id)
+        messageinfo = context.bot.send_message(chat_id, text="*Sybill Trelawney sees ... points ... in someones future ... but she's not sure ... who!?*\n\nShe randomly gives " + user_detail[1].user.mention_markdown() + " of " + receiverHouse + " 10 points!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,3600,"Trelawney")
+    elif random_char == 4:
+        # Umbridge
+        current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"negative",-2,"from_admin",update,context,None,receiverHouse)
+        context.bot.send_sticker(chat_id, sticker=umbridge_file_id, reply_to_message_id=most_recent_message_id)
+        messageinfo = context.bot.send_message(chat_id, text="*Dolores Umbridge thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + "* is a Muggle-Born!*\n\nShe deducts 2 points from them!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,3600,"Umbridge")
+    elif random_char == 5:
+        # Felix Felicis
+        current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"positive",2,"from_admin",update,context,None,receiverHouse)
+        context.bot.send_sticker(chat_id, sticker=felix_file_id, reply_to_message_id=most_recent_message_id)
+        messageinfo = context.bot.send_message(chat_id, text="*Felix Felicis thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " *looks lucky today!*\n\nHe awards them 2 points!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,3600,"Felix")
+
+def hp_character_appearance_counter(chat_id,update,context,term_id,timestamp) -> None:
+    global character_count
+    character_count += 1
+
+    if character_count == character_total:
+        hp_character_appearance(chat_id,update,context,timestamp,term_id)
+        character_count = 0
+
+def log_bot_message(message_id, chat_id, timestamp, duration = standard_duration, type = "Standard", status = "sent") -> None:
+
+    if type == "MostRecent":
+        select = cursor.execute("SELECT * FROM bot_service_messages WHERE chat_id = ? AND type = ?",(chat_id,type))
+        rows = select.fetchone()
+        if rows:
+            cursor.execute("UPDATE bot_service_messages SET created_date = ?, status = ?, message_id = ? WHERE chat_id = ? AND type = ?",(timestamp,status,message_id,chat_id,type))
+        else: 
+            cursor.execute("INSERT INTO bot_service_messages (message_id, chat_id, created_date, status, duration, type) VALUES(?,?,?,?,?,?)",(message_id, chat_id, timestamp, status, duration, type))
+            db.commit()
+    else:
+        cursor.execute("INSERT INTO bot_service_messages (message_id, chat_id, created_date, status, duration, type) VALUES(?,?,?,?,?,?)",(message_id, chat_id, timestamp, status, duration, type))
+        db.commit()
 
 def del_bot_message(chat_id, context):
     time = datetime.now()
@@ -863,7 +973,6 @@ def roll_command(update: Update, context: CallbackContext) -> None:
         high = 8
         rolled = random.randint(low, high)
         messageinfo = context.bot.send_message(chat_id, text=random.choice(rollSass) + "\n\n" + str(rolled))
-        log_bot_message(messageinfo.message_id,chat_id,timestamp, long_duration)
 
     elif(regexp.search(chat_text)):
         dice = chat_text.split()
@@ -877,7 +986,6 @@ def roll_command(update: Update, context: CallbackContext) -> None:
             loop = loop + 1
             rolled.append(random.randint(low, high))
         messageinfo = context.bot.send_message(chat_id, text=random.choice(rollSass) + "\n\n" + str(rolled))
-        log_bot_message(messageinfo.message_id,chat_id,timestamp, long_duration)
 
     else:
         messageinfo = context.bot.send_message(chat_id, text="Silly human. Of course you typed the wrong format. It's either '/roll' or '/roll XdY' where X is the number of dice, and Y is how many sides each dice has. For example, '/roll 2d6'")
@@ -893,12 +1001,18 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
         chat_id = str(update.message.chat.id)
     chat_text = update.message.text
     user_id = str(update.message.from_user.id)
+    message_id = update.message.message_id
     user_status = (context.bot.get_chat_member(chat_id,user_id)).status
     username = context.bot.get_chat_member(chat_id,user_id).user.username
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S")) 
+
+    # Console Logging
     print(f"\033[1mTime:\033[0m {timestamp} \033[1mGroup Name:\033[0m {update.message.chat.title} \033[1mGroup ID: \033[0m{update.message.chat.id} \033[1m User:\033[0m {username} \n{chat_text} ")
-    
+    # Log Most Recent message ID for each chat
+    # The user_id on the end here is a bit of a cludge, status isn't really supposed to hold user ID's but it works for the HP Character Appearance stuff
+    log_bot_message(message_id,chat_id,timestamp,3600,"MostRecent",user_id)
+
     # Lookup to check if text is a trigger - send trigger message to group.
     lookup = trigger_lookup(chat_text.lower(), chat_id)
     if lookup[0] == 1:
@@ -928,14 +1042,20 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     else:
         frequency_count += 1
 
-    hp_term_tracker(chat_id, context)
+    term_id = hp_term_tracker(chat_id, context)
     # Check if message is a a reply
     if update.message.reply_to_message:
         if not update.message.reply_to_message.from_user.is_bot:
+            # Reply to a user, award points if appropriate
             hp_points(update, context, chat_id, timestamp)
         else:
-            pass # replying to Marvin with text, does nothing.
+            # Replying to Marvin, do stuff if needed
+            hp_character_appearance(chat_id,update,context,timestamp,term_id,user=True)
+            pass
+
+    hp_character_appearance_counter(chat_id,update,context,term_id,timestamp)            
     del_bot_message(chat_id, context)
+
 
 def marvin_personality() -> None:
     json_file = open("Sass.json")
@@ -947,6 +1067,7 @@ def marvin_personality() -> None:
 # Image Polling
 def chat_media_polling(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
+    #print(update)
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
     # What sort of message have we received?
@@ -961,7 +1082,6 @@ def chat_media_polling(update: Update, context: CallbackContext) -> None:
         trigger_type = "sticker"
     else:
         print("Received a file type I'm not familiar with")
-        #print(update.message)
     
     # If this is a response to a Marvin service message, check if we need to save a trigger
     if update.message.reply_to_message:
@@ -975,8 +1095,6 @@ def chat_media_polling(update: Update, context: CallbackContext) -> None:
                 rest_text = chat_text.split(' ', 1)[1]
                 trigger_word = u'' + rest_text.split(separator)[0].strip().lower()
                 save_trigger(chat_id,trigger_word,"media",timestamp,context,trigger_type,file_id)
-                #context.bot.send_message(chat_id, text="Nice, I got that. \n\nThe GIF File ID is " + update.message.animation.file_id + "\n\nThe original trigger you tried to add was " + trigger_word)
-                #context.bot.send_animation(chat_id, animation=update.message.animation.file_id)
             else:
                 # Not a valid service message, move on
                 pass
