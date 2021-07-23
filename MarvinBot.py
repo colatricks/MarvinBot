@@ -846,7 +846,7 @@ def hp_character_appearance(chat_id,update,context,timestamp,term_id,user=False)
 
 def hp_random_character(chat_id,context,update,timestamp,term_id) -> None:
     total_standard_characters = 7
-    random_standard_char = random.randint(7, total_standard_characters)
+    random_standard_char = random.randint(1, total_standard_characters)
 
     # Get the sticker set to pull associated file_id's
     # Might need to store these in the DB eventually, will see how quick/slow it is.
