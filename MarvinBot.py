@@ -748,28 +748,28 @@ def hp_totals(chat_id, term_id, term_end, timestamp, context, query_type="Standa
             if list(points_list)[0] == "🦁 : ":
                 house_champion = "🦁 Gryffindor! 🦁"
                 house_champion_user = gryffindor_user_detail[1].user.mention_markdown()
-                house_champion_points = gryffindor_points
+                house_champion_points = points_Gryffindor
 
             elif list(points_list)[0] == "🐍 : ":
                 house_champion = "🐍 Slytherin! 🐍"
                 house_champion_user = slytherin_user_detail[1].user.mention_markdown()
-                house_champion_points = slytherin_points
+                house_champion_points = points_Slytherin
 
             elif list(points_list)[0] == "🦡 : ":
                 house_champion = "🦡 Hufflepuff! 🦡"
                 house_champion_user = hufflepuff_user_detail[1].user.mention_markdown()
-                house_champion_points = hufflepuff_points
+                house_champion_points = points_Hufflepuff
 
             elif list(points_list)[0] == "🦅 : ":
                 house_champion = "🦅 Ravenclaw! 🦅"
                 house_champion_user = ravenclaw_user_detail[1].user.mention_markdown()
-                house_champion_points = ravenclaw_points
+                house_champion_points = points_Ravenclaw
 
             elif list(points_list)[0] == "🧝‍♀️ : ":
                 house_champion = "🧝‍♀️ House Elves! 🧝‍♀️"
                 house_champion_user = houseelf_user_detail[1].user.mention_markdown()
-                house_champion_points = houseelf_points
-                context.bot.send_animation(chat_id, animation="CgACAgQAAxkBAAIUL2D7AAFKzPsWV-znJwSdFwVvDVbN5gACTAIAAgYCbFOBM42CzI-J6SAE")
+                house_champion_points = points_Houseelf
+
             messageinfo = context.bot.send_message(chat_id, text=f"✨✨✨ *END OF TERM!* ✨✨✨\n\nThe winner of this terms House Cup with a total of *{house_champion_points} points* ...\n\n{house_champion}\n\nAlso a huge congratulations to each of this terms ... \n\n⚔️*House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_points}\n🐍: {slytherin_sentence} {slytherin_points}\n🦡: {hufflepuff_sentence} {hufflepuff_points}\n🦅: {ravenclaw_sentence} {ravenclaw_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_points}\n\n*Points have been reset and a new term has begun!*", parse_mode="Markdown")
             context.bot.pin_chat_message(chat_id,messageinfo.message_id)
             return house_champion, house_champion_points, house_champion_user, house_champion_points
