@@ -63,7 +63,7 @@ frequency_count = 0
 frequency_total = 400 # how many messages are sent before Marvin 'speaks'
 
 # HP Character Appearance Counter, how many messages until a character appears
-standard_character_count = 50
+standard_character_count = 80
 standard_character_total = 500
 epic_character_count = 1
 epic_character_count = 5
@@ -840,8 +840,8 @@ def hp_character_appearance(chat_id,update,context,timestamp,term_id,user=False)
                 pass
 
 def hp_random_character(chat_id,context,update,timestamp,term_id) -> None:
-    total_standard_characters = 6
-    random_standard_char = random.randint(1, total_standard_characters)
+    total_standard_characters = 7
+    random_standard_char = random.randint(7, total_standard_characters)
 
     # Get the sticker set to pull associated file_id's
     # Might need to store these in the DB eventually, will see how quick/slow it is.
@@ -861,6 +861,8 @@ def hp_random_character(chat_id,context,update,timestamp,term_id) -> None:
             trelawney_file_id = sticker.file_id 
         elif sticker.emoji == "😁":
             umbridge_file_id = sticker.file_id
+        elif sticker.emoji == "😉":
+            buckbeak_file_id = sticker.file_id
     
     # Extra Ones Made Manually
     sticker_set = context.bot.get_sticker_set("PotterAdditional")
@@ -913,6 +915,7 @@ def hp_random_character(chat_id,context,update,timestamp,term_id) -> None:
         messageinfo = context.bot.send_message(chat_id, text="*Professor Slughorn thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " *looks lucky today!*\n\nHe awards them 2 points!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
     elif random_standard_char == 6:
         # Troll
+        # Troll has wide area of effect, hits three people
         select = cursor.execute("SELECT * FROM users WHERE chat_id = ? AND status NOT IN ('kicked','left') ORDER BY RANDOM() LIMIT 3",(chat_id,))
         rows = select.fetchall()
         userList = []
@@ -921,11 +924,27 @@ def hp_random_character(chat_id,context,update,timestamp,term_id) -> None:
             user_detail = activity_status_check(user_id,chat_id,context)
             current_points = hp_allocate_points(chat_id,timestamp,user_id,term_id,"negative",-5,"from_admin",update,context,None,receiverHouse)
             receiverHouse = hp_get_user_house(chat_id,user_id)
-            sentence = user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + "(New Total: " + str(current_points) + ")"
+            sentence = user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " (New Total: " + str(current_points) + ")"
             userList.append(sentence)
         sentenceList = "\n".join(userList)
         context.bot.send_sticker(chat_id, sticker=troll_file_id)
         messageinfo = context.bot.send_message(chat_id, text="*TROLLLL IN THE DUNGEON!*\n\nHe swings his club and hits the following for 5 points:\n\n" + sentenceList, parse_mode='markdown')
+    elif random_standard_char == 7:
+        # Buckbeak
+        # Troll has wide area of effect, hits three people
+        select = cursor.execute("SELECT * FROM users WHERE chat_id = ? AND status NOT IN ('kicked','left') ORDER BY RANDOM() LIMIT 3",(chat_id,))
+        rows = select.fetchall()
+        userList = []
+        for row in rows:
+            user_id = row[0]
+            user_detail = activity_status_check(user_id,chat_id,context)
+            current_points = hp_allocate_points(chat_id,timestamp,user_id,term_id,"positive",5,"from_admin",update,context,None,receiverHouse)
+            receiverHouse = hp_get_user_house(chat_id,user_id)
+            sentence = user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " (New Total: " + str(current_points) + ")"
+            userList.append(sentence)
+        sentenceList = "\n".join(userList)
+        context.bot.send_sticker(chat_id, sticker=buckbeak_file_id)
+        messageinfo = context.bot.send_message(chat_id, text="*Buckbeak has landed nearby!*\n\nApproaching carefully, the following are granted 5 points:\n\n" + sentenceList, parse_mode='markdown')
 
 def hp_character_appearance_counter(chat_id,update,context,term_id,timestamp) -> None:
     global standard_character_count
