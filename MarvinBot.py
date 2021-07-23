@@ -63,7 +63,7 @@ frequency_count = 0
 frequency_total = 400 # how many messages are sent before Marvin 'speaks'
 
 # HP Character Appearance Counter, how many messages until a character appears
-standard_character_count = 80
+standard_character_count = 300
 standard_character_total = 500
 epic_character_count = 1
 epic_character_count = 5
