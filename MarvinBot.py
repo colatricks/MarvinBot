@@ -88,7 +88,7 @@ cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_points' ('user_id' INTEGER NOT NU
 cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_terms' ('chat_id' INT NOT NULL, 'term_id' TEXT NOT NULL, 'start_date' TEXT NOT NULL, 'end_date' TEXT NOT NULL, 'is_current' INT NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_past_winners' ('chat_id' INT NOT NULL, 'winning_house' TEXT NOT NULL, 'house_points_total' INT NOT NULL, 'house_champion' TEXT NOT NULL, 'champion_points_total' INT NOT NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL, 'duration' INT, 'type' TEXT)")
-
+cursor.execute("CREATE TABLE IF NOT EXISTS 'config' ('chat_id' INT NOT NULL, 'config_name' TEXT NOT NULL, 'config_group' TEXT NOT NULL, 'config_value' TEXT NOT NULL, 'config_description' TEXT NOT NULL)")
 
 # HELPERS
 # Make timestamps pretty again
@@ -749,22 +749,27 @@ def hp_totals(chat_id, term_id, term_end, timestamp, context, query_type="Standa
                 house_champion = "🦁 Gryffindor! 🦁"
                 house_champion_user = gryffindor_user_detail[1].user.mention_markdown()
                 house_champion_points = gryffindor_points
+                context.bot.send_animation(chat_id, animation="CgACAgQAAxkBAAIUK2D6_-0X0idfY3kVv0EVl8sk5BPKAAIOAgACRHjVUhOYdWXQM-D1IAQ")
             elif list(points_list)[0] == "🐍 : ":
                 house_champion = "🐍 Slytherin! 🐍"
                 house_champion_user = slytherin_user_detail[1].user.mention_markdown()
                 house_champion_points = slytherin_points
+                context.bot.send_animation(chat_id, animation="CgACAgQAAxkBAAIULGD7AAEK7R8X8swUuiR6N38YTd-xggACIgIAAlZ23FI5JDlzU-KUiyAE")
             elif list(points_list)[0] == "🦡 : ":
                 house_champion = "🦡 Hufflepuff! 🦡"
                 house_champion_user = hufflepuff_user_detail[1].user.mention_markdown()
                 house_champion_points = hufflepuff_points
+                context.bot.send_animation(chat_id, animation="CgACAgQAAxkBAAIULWD7AAEZ1EDPhdyVRhyymPLlLIQQoQACWAIAAv6z3FIW4p8HcUJhLSAE")
             elif list(points_list)[0] == "🦅 : ":
                 house_champion = "🦅 Ravenclaw! 🦅"
                 house_champion_user = ravenclaw_user_detail[1].user.mention_markdown()
                 house_champion_points = ravenclaw_points
+                context.bot.send_animation(chat_id, animation="CgACAgQAAxkBAAIULmD7AAE3UGZNmWBRIStBLCgo1SXzJgACOgIAAloG3FLBzebpMCxsPiAE")
             elif list(points_list)[0] == "🧝‍♀️ : ":
                 house_champion = "🧝‍♀️ House Elves! 🧝‍♀️"
                 house_champion_user = houseelf_user_detail[1].user.mention_markdown()
                 house_champion_points = houseelf_points
+                context.bot.send_animation(chat_id, animation="CgACAgQAAxkBAAIUL2D7AAFKzPsWV-znJwSdFwVvDVbN5gACTAIAAgYCbFOBM42CzI-J6SAE")
             messageinfo = context.bot.send_message(chat_id, text=f"✨✨✨ *END OF TERM!* ✨✨✨\n\nThe winner of this terms House Cup with a total of *{house_champion_points} points* ...\n\n{house_champion}\n\nAlso a huge congratulations to each of this terms ... \n\n⚔️*House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_points}\n🐍: {slytherin_sentence} {slytherin_points}\n🦡: {hufflepuff_sentence} {hufflepuff_points}\n🦅: {ravenclaw_sentence} {ravenclaw_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_points}\n\n*Points have been reset and a new term has begun!*", parse_mode="Markdown")
             context.bot.pin_chat_message(chat_id,messageinfo.message_id)
             return house_champion, house_champion_points, house_champion_user, house_champion_points
@@ -884,9 +889,9 @@ def hp_random_character(chat_id,context,update,timestamp,term_id) -> None:
         # Golden Snitch Game
         # Reply logic for Snitch game is in hp_character_appearance()
         messageinfo = context.bot.send_sticker(chat_id, sticker=snitch_file_id)
-        log_bot_message(messageinfo.message_id,chat_id,timestamp,21600,"Snitch_Sticker","open")
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,172800,"Snitch_Sticker","open")
         messageinfo = context.bot.send_message(chat_id, text="*Quick!\n\nThe Golden Snitch just flew past your head!*\n\n_Reply to this message_ with '*CAUGHT IT!*' to catch it!", parse_mode='markdown')
-        log_bot_message(messageinfo.message_id,chat_id,timestamp,21600,"Snitch","open")
+        log_bot_message(messageinfo.message_id,chat_id,timestamp,172800,"Snitch","open")
     elif random_standard_char == 2:
         # Snape Unimpressed
         current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"negative",-10,"from_admin",update,context,None,receiverHouse)
@@ -1037,6 +1042,9 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S")) 
 
+    # Get Chat Config
+    chat_config = get_chat_config(chat_id)
+
     # Console Logging
     print(f"\033[1mTime:\033[0m {timestamp} \033[1mGroup Name:\033[0m {update.message.chat.title} \033[1mGroup ID: \033[0m{update.message.chat.id} \033[1m User:\033[0m {username} \n{chat_text} ")
     # Log Most Recent message ID for each chat
@@ -1130,6 +1138,24 @@ def chat_media_polling(update: Update, context: CallbackContext) -> None:
         else:
             pass # replying to a User with images etc, does nothing.
 
+# Config Commands
+#
+#
+
+def get_chat_config(chat_id) -> None:
+    # Create Default Config Values if they don't exist
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"roll_enabled","Roll","Yes","Toggles the /roll function - options are Yes/No",chat_id,"roll_enabled"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"reputation_enabled","Harry Potter","Yes","Toggles the +/- reputation system - options are Yes/No",chat_id,"reputation_enabled"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"marvin_sass_enabled","Marvin","Yes","Toggles Marvins random chatter and poll comments - options are Yes/No",chat_id,"marvin_sass_enabled"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"characters_enabled","Harry Potter","Yes","Toggles HP Characters appearances. reputation_enabled must be Yes.",chat_id,"characters_enabled"))
+
+def set_chat_config() -> None:
+    pass
+
+def config_command(update: Update, context: CallbackContext) -> None:
+    pass
+
+
 # Original Code below here
 def main() -> None:
     """Start the bot."""
@@ -1151,6 +1177,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("sortinghat", hp_assign_house))
     dispatcher.add_handler(CommandHandler("points", hp_points_admin))
     dispatcher.add_handler(CommandHandler("tags", hp_tags))
+    dispatcher.add_handler(CommandHandler("config", config_command))
 
     # on non command i.e message - checks each message and runs it through our poller
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command & ~Filters.update.edited_message, chat_polling))
