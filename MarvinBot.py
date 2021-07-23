@@ -749,22 +749,22 @@ def hp_totals(chat_id, term_id, term_end, timestamp, context, query_type="Standa
                 house_champion = "🦁 Gryffindor! 🦁"
                 house_champion_user = gryffindor_user_detail[1].user.mention_markdown()
                 house_champion_points = gryffindor_points
-                context.bot.send_animation(chat_id, animation="CgACAgQAAxkBAAIUK2D6_-0X0idfY3kVv0EVl8sk5BPKAAIOAgACRHjVUhOYdWXQM-D1IAQ")
+
             elif list(points_list)[0] == "🐍 : ":
                 house_champion = "🐍 Slytherin! 🐍"
                 house_champion_user = slytherin_user_detail[1].user.mention_markdown()
                 house_champion_points = slytherin_points
-                context.bot.send_animation(chat_id, animation="CgACAgQAAxkBAAIULGD7AAEK7R8X8swUuiR6N38YTd-xggACIgIAAlZ23FI5JDlzU-KUiyAE")
+
             elif list(points_list)[0] == "🦡 : ":
                 house_champion = "🦡 Hufflepuff! 🦡"
                 house_champion_user = hufflepuff_user_detail[1].user.mention_markdown()
                 house_champion_points = hufflepuff_points
-                context.bot.send_animation(chat_id, animation="CgACAgQAAxkBAAIULWD7AAEZ1EDPhdyVRhyymPLlLIQQoQACWAIAAv6z3FIW4p8HcUJhLSAE")
+
             elif list(points_list)[0] == "🦅 : ":
                 house_champion = "🦅 Ravenclaw! 🦅"
                 house_champion_user = ravenclaw_user_detail[1].user.mention_markdown()
                 house_champion_points = ravenclaw_points
-                context.bot.send_animation(chat_id, animation="CgACAgQAAxkBAAIULmD7AAE3UGZNmWBRIStBLCgo1SXzJgACOgIAAloG3FLBzebpMCxsPiAE")
+
             elif list(points_list)[0] == "🧝‍♀️ : ":
                 house_champion = "🧝‍♀️ House Elves! 🧝‍♀️"
                 house_champion_user = houseelf_user_detail[1].user.mention_markdown()
