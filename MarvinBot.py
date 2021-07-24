@@ -82,13 +82,21 @@ logger = logging.getLogger(__name__)
 dbname = "marvin"
 db = sqlite3.connect(dbname+".db", check_same_thread=False)
 cursor = db.cursor()
-cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT NULL, 'trigger_response' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL, 'trigger_response_type' TEXT, 'trigger_response_media_id' TEXT)")
-cursor.execute("CREATE TABLE IF NOT EXISTS 'users' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL, 'status' TEXT NOT NULL, 'hp_house' TEXT, 'username' TEXT NOT NULL)")
-cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_points' ('user_id' INTEGER NOT NULL, chat_id INT NOT NULL, 'points' INT NOT NULL, 'timestamp' TEXT NOT NULL, 'term_id' TEXT NOT NULL)")
-cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_terms' ('chat_id' INT NOT NULL, 'term_id' TEXT NOT NULL, 'start_date' TEXT NOT NULL, 'end_date' TEXT NOT NULL, 'is_current' INT NOT NULL)")
-cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_past_winners' ('chat_id' INT NOT NULL, 'winning_house' TEXT NOT NULL, 'house_points_total' INT NOT NULL, 'house_champion' TEXT NOT NULL, 'champion_points_total' INT NOT NULL)")
-cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL, 'duration' INT, 'type' TEXT)")
-cursor.execute("CREATE TABLE IF NOT EXISTS 'config' ('chat_id' INT NOT NULL, 'config_name' TEXT NOT NULL, 'config_group' TEXT NOT NULL, 'config_value' TEXT NOT NULL, 'config_description' TEXT NOT NULL)")
+
+def db_initialise(chat_id) -> None:
+    cursor.execute("CREATE TABLE IF NOT EXISTS 'triggers' ('trigger_word' TEXT NOT NULL, 'trigger_response' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL, 'trigger_response_type' TEXT, 'trigger_response_media_id' TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS 'users' ('user_id' INTEGER NOT NULL, 'chat_id' INTEGER NOT NULL, 'timestamp' TEXT NOT NULL, 'status' TEXT NOT NULL, 'hp_house' TEXT, 'username' TEXT NOT NULL)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_points' ('user_id' INTEGER NOT NULL, chat_id INT NOT NULL, 'points' INT NOT NULL, 'timestamp' TEXT NOT NULL, 'term_id' TEXT NOT NULL)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_terms' ('chat_id' INT NOT NULL, 'term_id' TEXT NOT NULL, 'start_date' TEXT NOT NULL, 'end_date' TEXT NOT NULL, 'is_current' INT NOT NULL)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_past_winners' ('chat_id' INT NOT NULL, 'winning_house' TEXT NOT NULL, 'house_points_total' INT NOT NULL, 'house_champion' TEXT NOT NULL, 'champion_points_total' INT NOT NULL)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL, 'duration' INT, 'type' TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS 'config' ('chat_id' INT NOT NULL, 'config_name' TEXT NOT NULL, 'config_group' TEXT NOT NULL, 'config_value' TEXT NOT NULL, 'config_description' TEXT NOT NULL)")
+
+    # Create Default Config Values if they don't exist
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"roll_enabled","Roll","Yes","Toggles the /roll function - options are Yes/No",chat_id,"roll_enabled"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"reputation_enabled","Harry Potter","Yes","Toggles the +/- reputation system - options are Yes/No",chat_id,"reputation_enabled"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"marvin_sass_enabled","Marvin","Yes","Toggles Marvins random chatter and poll comments - options are Yes/No",chat_id,"marvin_sass_enabled"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"characters_enabled","Harry Potter","Yes","Toggles HP Characters appearances. reputation_enabled must be Yes.",chat_id,"characters_enabled"))
 
 # HELPERS
 # Make timestamps pretty again
@@ -500,7 +508,8 @@ def hp_term_tracker(chat_id, context) -> None:
 
     else:
         # First ever term!
-        cursor.execute("INSERT INTO hp_terms (chat_id, term_id, start_date, end_date, is_current) VALUES(?,?,?,?,1)",(chat_id,str(uuid.uuid4()),timestamp_now,timestamp_plus))
+        term_id = str(uuid.uuid4())
+        cursor.execute("INSERT INTO hp_terms (chat_id, term_id, start_date, end_date, is_current) VALUES(?,?,?,?,1)",(chat_id,term_id,timestamp_now,timestamp_plus))
         db.commit()
     
     return term_id
@@ -686,51 +695,51 @@ def hp_totals(chat_id, term_id, term_end, timestamp, context, query_type="Standa
         select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Gryffindor' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
         rows = select.fetchone()
         if rows:
-            gryffindor_points = f"({rows[2]})"
+            gryffindor_champion_points = f"({rows[2]})"
             gryffindor_user_detail = activity_status_check(rows[0],rows[3],context)
             gryffindor_sentence = gryffindor_user_detail[1].user.mention_markdown()
         else:
-            gryffindor_points = " "
+            gryffindor_champion_points = " "
             gryffindor_sentence = "Nobody yet!" 
 
         select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Slytherin' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
         rows = select.fetchone()
         if rows:
-            slytherin_points = f"({rows[2]})"
+            slytherin_champion_points = f"({rows[2]})"
             slytherin_user_detail = activity_status_check(rows[0],rows[3],context)
             slytherin_sentence = slytherin_user_detail[1].user.mention_markdown()
         else: 
-            slytherin_points = " "
+            slytherin_champion_points = " "
             slytherin_sentence = "Nobody yet!" 
 
         select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Hufflepuff' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
         rows = select.fetchone()
         if rows:
-            hufflepuff_points = f"({rows[2]})"
+            hufflepuff_champion_points = f"({rows[2]})"
             hufflepuff_user_detail = activity_status_check(rows[0],rows[3],context)
             hufflepuff_sentence = hufflepuff_user_detail[1].user.mention_markdown()
         else: 
-            hufflepuff_points = " "
+            hufflepuff_champion_points = " "
             hufflepuff_sentence = "Nobody yet!" 
 
         select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Ravenclaw' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
         rows = select.fetchone()
         if rows:
-            ravenclaw_points = f"({rows[2]})"
+            ravenclaw_champion_points = f"({rows[2]})"
             ravenclaw_user_detail = activity_status_check(rows[0],rows[3],context)
             ravenclaw_sentence = ravenclaw_user_detail[1].user.mention_markdown()
         else: 
-            ravenclaw_points = " "
+            ravenclaw_champion_points = " "
             ravenclaw_sentence = "Nobody yet!" 
 
         select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE hp_points.term_id = ? AND users.hp_house = 'Houseelf' AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (term_id,))
         rows = select.fetchone()
         if rows:
-            houseelf_points = f"({rows[2]})"
+            houseelf_champion_points = f"({rows[2]})"
             houseelf_user_detail = activity_status_check(rows[0],rows[3],context)
             houseelf_sentence = houseelf_user_detail[1].user.mention_markdown()
         else: 
-            houseelf_points = " "
+            houseelf_champion_points = " "
             houseelf_sentence = "Nobody yet!" 
 
         # Finished, send message to users
@@ -739,9 +748,9 @@ def hp_totals(chat_id, term_id, term_end, timestamp, context, query_type="Standa
             select = cursor.execute("SELECT * FROM hp_past_winners WHERE chat_id = ?",(chat_id,))
             rows = select.fetchone()
             if rows:
-                messageinfo = context.bot.send_message(chat_id, text=f"🏰 *House Points Totals* 🏰\n{sentenceHouse}\nPoints wasted by Filthy Muggles: {points_Muggles}\n\n⚔️*Current House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_points}\n🐍: {slytherin_sentence} {slytherin_points}\n🦡: {hufflepuff_sentence} {hufflepuff_points}\n🦅: {ravenclaw_sentence} {ravenclaw_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_points}\n\n*Last Terms Winning House & Champion:*\n{rows[1]}\n{rows[3]} with {rows[4]} points!\n\n*This term ends in{prettyDate}*", parse_mode="Markdown")
+                messageinfo = context.bot.send_message(chat_id, text=f"🏰 *House Points Totals* 🏰\n{sentenceHouse}\nPoints wasted by Filthy Muggles: {points_Muggles}\n\n⚔️*Current House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_champion_points}\n🐍: {slytherin_sentence} {slytherin_champion_points}\n🦡: {hufflepuff_sentence} {hufflepuff_champion_points}\n🦅: {ravenclaw_sentence} {ravenclaw_champion_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_champion_points}\n\n*Last Terms Winning House & Champion:*\n{rows[1]}\n{rows[3]} with {rows[4]} points!\n\n*This term ends in{prettyDate}*", parse_mode="Markdown")
             else:
-                messageinfo = context.bot.send_message(chat_id, text=f"🏰 *House Points Totals* 🏰\n{sentenceHouse}\nPoints wasted by Filthy Muggles: {points_Muggles}\n\n⚔️*Current House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_points}\n🐍: {slytherin_sentence} {slytherin_points}\n🦡: {hufflepuff_sentence} {hufflepuff_points}\n🦅: {ravenclaw_sentence} {ravenclaw_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_points}\n\n*This term ends in{prettyDate}*", parse_mode="Markdown")
+                messageinfo = context.bot.send_message(chat_id, text=f"🏰 *House Points Totals* 🏰\n{sentenceHouse}\nPoints wasted by Filthy Muggles: {points_Muggles}\n\n⚔️*Current House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_champion_points}\n🐍: {slytherin_sentence} {slytherin_champion_points}\n🦡: {hufflepuff_sentence} {hufflepuff_champion_points}\n🦅: {ravenclaw_sentence} {ravenclaw_champion_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_champion_points}\n\n*This term ends in{prettyDate}*", parse_mode="Markdown")
         # If End of Term do other stuff
         elif query_type == "EndTerm":
             house_champion_points = list(points_list.values())[0]
@@ -1034,6 +1043,10 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
         chat_id = str(update.message.chat_id)
     elif update.message.chat.id:
         chat_id = str(update.message.chat.id)
+
+    # Start the DB for each chat
+    db_initialise(chat_id)
+
     chat_text = update.message.text
     user_id = str(update.message.from_user.id)
     message_id = update.message.message_id
@@ -1104,7 +1117,7 @@ def marvin_personality() -> None:
 # Image Polling
 def chat_media_polling(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
-    #print(update)
+    print(update)
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
     # What sort of message have we received?
@@ -1138,16 +1151,12 @@ def chat_media_polling(update: Update, context: CallbackContext) -> None:
         else:
             pass # replying to a User with images etc, does nothing.
 
-# Config Commands
+# General Admin Functionality
 #
 #
 
 def get_chat_config(chat_id) -> None:
-    # Create Default Config Values if they don't exist
-    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"roll_enabled","Roll","Yes","Toggles the /roll function - options are Yes/No",chat_id,"roll_enabled"))
-    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"reputation_enabled","Harry Potter","Yes","Toggles the +/- reputation system - options are Yes/No",chat_id,"reputation_enabled"))
-    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"marvin_sass_enabled","Marvin","Yes","Toggles Marvins random chatter and poll comments - options are Yes/No",chat_id,"marvin_sass_enabled"))
-    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"characters_enabled","Harry Potter","Yes","Toggles HP Characters appearances. reputation_enabled must be Yes.",chat_id,"characters_enabled"))
+    pass
 
 def set_chat_config() -> None:
     pass
@@ -1155,6 +1164,23 @@ def set_chat_config() -> None:
 def config_command(update: Update, context: CallbackContext) -> None:
     pass
 
+def broadcast_command() -> None:
+    # Old code from TriggerBot.py - this needs completely reworked
+    #SELECT DISTINCT chat_id FROM users;
+    #if(m.from_user.id != owner):
+    #    return
+    #if(len(m.text.split()) == 1):
+    #    bot.send_message(m.chat.id, 'No text provided!')
+    #    return
+    #count = 0
+    #for g in triggers.keys():
+    #    try:
+    #        bot.send_message(int(g), m.text.split(' ', 1)[1])
+    #        count += 1
+    #    except ApiException:
+    #        continue
+    #bot.send_message(m.chat.id, 'Broadcast sent to {} groups of {}'.format(count, len(triggers.keys())))
+    pass
 
 # Original Code below here
 def main() -> None:
@@ -1178,6 +1204,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("points", hp_points_admin))
     dispatcher.add_handler(CommandHandler("tags", hp_tags))
     dispatcher.add_handler(CommandHandler("config", config_command))
+    dispatcher.add_handler(CommandHandler("broadcast", broadcast_command))
 
     # on non command i.e message - checks each message and runs it through our poller
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command & ~Filters.update.edited_message, chat_polling))
