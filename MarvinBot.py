@@ -56,20 +56,12 @@ long_duration = 90
 # Separator character. Used for commands with a to/from type response
 separator = '->'
 
-# Used for random element to Marvins Personality
-# Marvin has some personality stored in rollSass.json and Sass.json 
-# rollSass is used every time /roll is invoked, Sass is used based on the frequency below
-frequency_count = 0
-frequency_total = 400 # how many messages are sent before Marvin 'speaks'
-
-# HP Character Appearance Counter, how many messages until a character appears
-standard_character_count = 300
-standard_character_total = 500
-epic_character_count = 1
-epic_character_count = 5
-random_char = 1
-
 # END USER CONFIGURATION 
+
+# Counts for some functionality - this will be replaced with values held in the DB so it's counted per chat soon.
+frequency_count = 0
+standard_character_count = 0
+epic_character_count = 0
 
 # Enable logging
 logging.basicConfig(
@@ -90,13 +82,17 @@ def db_initialise(chat_id) -> None:
     cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_terms' ('chat_id' INT NOT NULL, 'term_id' TEXT NOT NULL, 'start_date' TEXT NOT NULL, 'end_date' TEXT NOT NULL, 'is_current' INT NOT NULL)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_past_winners' ('chat_id' INT NOT NULL, 'winning_house' TEXT NOT NULL, 'house_points_total' INT NOT NULL, 'house_champion' TEXT NOT NULL, 'champion_points_total' INT NOT NULL)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL, 'duration' INT, 'type' TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS 'config' ('chat_id' INT NOT NULL, 'config_name' TEXT NOT NULL, 'config_group' TEXT NOT NULL, 'config_value' TEXT NOT NULL, 'config_description' TEXT NOT NULL)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS 'config' ('chat_id' INT NOT NULL, 'config_name' TEXT NOT NULL, 'config_group' TEXT NOT NULL, 'config_value' TEXT NOT NULL, 'config_description' TEXT NOT NULL, 'config_type' TEXT NOT NULL)")
 
     # Create Default Config Values if they don't exist
-    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"roll_enabled","Roll","Yes","Toggles the /roll function - options are Yes/No",chat_id,"roll_enabled"))
-    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"reputation_enabled","Harry Potter","Yes","Toggles the +/- reputation system - options are Yes/No",chat_id,"reputation_enabled"))
-    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"marvin_sass_enabled","Marvin","Yes","Toggles Marvins random chatter and poll comments - options are Yes/No",chat_id,"marvin_sass_enabled"))
-    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description) SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"characters_enabled","Harry Potter","Yes","Toggles HP Characters appearances. reputation_enabled must be Yes.",chat_id,"characters_enabled"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"roll_enabled","Roll","yes","Toggles the /roll function - options are Yes/No","boolean",chat_id,"roll_enabled"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"reputation_enabled","Harry Potter","yes","Toggles the +/- reputation system - options are Yes/No","boolean",chat_id,"reputation_enabled"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"marvin_sass_enabled","Marvin","yes","Toggles Marvins random chatter and poll comments - options are Yes/No","boolean",chat_id,"marvin_sass_enabled"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"marvin_sass_frequency","Marvin","10","How many messages between Marvin chatter","int",chat_id,"marvin_sass_frequency"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"standard_characters_enabled","Harry Potter","yes","Toggles Standard HP Characters appearances. reputation_enabled must be Yes.","boolean",chat_id,"standard_characters_enabled"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"standard_characters_frequency","Harry Potter","500","How many messages between Standard characters appearance","int",chat_id,"standard_characters_frequency"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"epic_characters_enabled","Harry Potter","yes","Toggles Epic HP Characters appearances. reputation_enabled must be Yes.","boolean",chat_id,"epic_characters_enabled"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"epic_characters_frequency","Harry Potter","1000","How many messages between Epic characters appearance","int",chat_id,"epic_characters_frequency"))
 
 # HELPERS
 # Make timestamps pretty again
@@ -143,6 +139,13 @@ def pretty_date(time=False):
     if day_diff < 365:
         return str(day_diff // 30) + " months ago"
     return str(day_diff // 365) + " years ago"
+
+def add_values_in_dict(sample_dict, key, list_of_values):
+    # Append multiple values to a key in the given dictionary
+    if key not in sample_dict:
+        sample_dict[key] = list()
+    sample_dict[key].extend(list_of_values)
+    return sample_dict
 
 # Help Functionality
 # /help prompts the user to talk directly to the bot and issue the /start command which shows the full help context
@@ -964,12 +967,16 @@ def hp_character_appearance_counter(chat_id,update,context,term_id,timestamp) ->
     global standard_character_count
     standard_character_count += 1
 
+    chat_config = get_chat_config(chat_id)
+    standard_character_total = int(chat_config['standard_characters_frequency'][1])
+
     if standard_character_count == standard_character_total:
         hp_character_appearance(chat_id,update,context,timestamp,term_id)
         standard_character_count = 0
 
 def log_bot_message(message_id, chat_id, timestamp, duration = standard_duration, type = "Standard", status = "sent") -> None:
 
+    # Used for keeping track of the most recent message_id from users
     if type == "MostRecent":
         select = cursor.execute("SELECT * FROM bot_service_messages WHERE chat_id = ? AND type = ?",(chat_id,type))
         rows = select.fetchone()
@@ -978,6 +985,7 @@ def log_bot_message(message_id, chat_id, timestamp, duration = standard_duration
         else: 
             cursor.execute("INSERT INTO bot_service_messages (message_id, chat_id, created_date, status, duration, type) VALUES(?,?,?,?,?,?)",(message_id, chat_id, timestamp, status, duration, type))
             db.commit()
+    # Used for keeping track of bot messages
     else:
         cursor.execute("INSERT INTO bot_service_messages (message_id, chat_id, created_date, status, duration, type) VALUES(?,?,?,?,?,?)",(message_id, chat_id, timestamp, status, duration, type))
         db.commit()
@@ -1006,36 +1014,39 @@ def roll_command(update: Update, context: CallbackContext) -> None:
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
 
-    regexp = re.compile('[0-9]+D[0-9]+', re.IGNORECASE)
+    chat_config = get_chat_config(chat_id)
 
-    json_file = open("rollSass.json")
-    rollSass = json.load(json_file)
-    json_file.close()
+    if chat_config['roll_enabled'][1].lower() == "yes":
+        regexp = re.compile('[0-9]+D[0-9]+', re.IGNORECASE)
 
-    if (len(chat_text) == 5):
-        low = 1
-        high = 8
-        rolled = random.randint(low, high)
-        messageinfo = context.bot.send_message(chat_id, text=random.choice(rollSass) + "\n\n" + str(rolled))
+        json_file = open("rollSass.json")
+        rollSass = json.load(json_file)
+        json_file.close()
 
-    elif(regexp.search(chat_text)):
-        dice = chat_text.split()
-        numbers = re.split("d",dice[1],flags=re.IGNORECASE)
-        low = 1
-        high = int(numbers[1])
-        totaldice = int(numbers[0])            
-        loop = 1
-        rolled=[]
-        while loop <= totaldice:                
-            loop = loop + 1
-            rolled.append(random.randint(low, high))
-        messageinfo = context.bot.send_message(chat_id, text=random.choice(rollSass) + "\n\n" + str(rolled))
+        if (len(chat_text) == 5):
+            low = 1
+            high = 8
+            rolled = random.randint(low, high)
+            messageinfo = context.bot.send_message(chat_id, text=random.choice(rollSass) + "\n\n" + str(rolled))
 
-    else:
-        messageinfo = context.bot.send_message(chat_id, text="Silly human. Of course you typed the wrong format. It's either '/roll' or '/roll XdY' where X is the number of dice, and Y is how many sides each dice has. For example, '/roll 2d6'")
-        log_bot_message(messageinfo.message_id,chat_id,timestamp, short_duration)
+        elif(regexp.search(chat_text)):
+            dice = chat_text.split()
+            numbers = re.split("d",dice[1],flags=re.IGNORECASE)
+            low = 1
+            high = int(numbers[1])
+            totaldice = int(numbers[0])            
+            loop = 1
+            rolled=[]
+            while loop <= totaldice:                
+                loop = loop + 1
+                rolled.append(random.randint(low, high))
+            messageinfo = context.bot.send_message(chat_id, text=random.choice(rollSass) + "\n\n" + str(rolled))
 
-# Passive chat polling 
+        else:
+            messageinfo = context.bot.send_message(chat_id, text="Silly human. Of course you typed the wrong format. It's either '/roll' or '/roll XdY' where X is the number of dice, and Y is how many sides each dice has. For example, '/roll 2d6'")
+            log_bot_message(messageinfo.message_id,chat_id,timestamp, short_duration)
+
+# Chat Polling 
 # Processes each message received in any groups where the Bot is active
 # 
 def chat_polling(update: Update, context: CallbackContext) -> None:
@@ -1047,6 +1058,9 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     # Start the DB for each chat
     db_initialise(chat_id)
 
+    # Get Chat Config
+    chat_config = get_chat_config(chat_id)
+
     chat_text = update.message.text
     user_id = str(update.message.from_user.id)
     message_id = update.message.message_id
@@ -1055,13 +1069,10 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S")) 
 
-    # Get Chat Config
-    chat_config = get_chat_config(chat_id)
-
     # Console Logging
     print(f"\033[1mTime:\033[0m {timestamp} \033[1mGroup Name:\033[0m {update.message.chat.title} \033[1mGroup ID: \033[0m{update.message.chat.id} \033[1m User:\033[0m {username} \n{chat_text} ")
     # Log Most Recent message ID for each chat
-    # The user_id on the end here is a bit of a cludge, status isn't really supposed to hold user ID's but it works for the HP Character Appearance stuff
+    # The user_id on the end here is a bit of a cludge, status isn't really supposed to hold user ID's but it works for the HP Character Appearance stuff will likely refactor at some point
     log_bot_message(message_id,chat_id,timestamp,3600,"MostRecent",user_id)
 
     # Lookup to check if text is a trigger - send trigger message to group.
@@ -1085,26 +1096,29 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
         db.commit()
     
     # Marvins Personality
-    global frequency_count
-    if frequency_count > frequency_total:
-        marvin_says = marvin_personality()
-        context.bot.send_message(chat_id, text=marvin_says)
-        frequency_count = 0
-    else:
-        frequency_count += 1
-
-    term_id = hp_term_tracker(chat_id, context)
-    # Check if message is a a reply
-    if update.message.reply_to_message:
-        if not update.message.reply_to_message.from_user.is_bot:
-            # Reply to a user, award points if appropriate
-            hp_points(update, context, chat_id, timestamp)
+    if chat_config['marvin_sass_enabled'][1].lower() == "yes":
+        global frequency_count
+        frequency_total = int(chat_config['marvin_sass_frequency'][1])
+        if frequency_count > frequency_total:
+            marvin_says = marvin_personality()
+            context.bot.send_message(chat_id, text=marvin_says)
+            frequency_count = 0
         else:
-            # Replying to Marvin, do stuff if needed
-            hp_character_appearance(chat_id,update,context,timestamp,term_id,user=True)
-            pass
+            frequency_count += 1
+    
+    if chat_config['reputation_enabled'][1].lower() == "yes":
+        term_id = hp_term_tracker(chat_id, context)
+    # Check if message is a a reply
+        if update.message.reply_to_message:
+            if not update.message.reply_to_message.from_user.is_bot:
+                # Reply to a user, award points if appropriate
+                hp_points(update, context, chat_id, timestamp)
+            else:
+                # Replying to Marvin, do stuff if needed
+                hp_character_appearance(chat_id,update,context,timestamp,term_id,user=True)
+                pass
 
-    hp_character_appearance_counter(chat_id,update,context,term_id,timestamp)            
+        hp_character_appearance_counter(chat_id,update,context,term_id,timestamp)            
     del_bot_message(chat_id, context)
 
 def marvin_personality() -> None:
@@ -1114,10 +1128,9 @@ def marvin_personality() -> None:
 
     return random.choice(Sass)
 
-# Image Polling
+# Image/GIF/Sticker Polling
 def chat_media_polling(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
-    print(update)
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
     # What sort of message have we received?
@@ -1155,14 +1168,101 @@ def chat_media_polling(update: Update, context: CallbackContext) -> None:
 #
 #
 
-def get_chat_config(chat_id) -> None:
-    pass
+def get_chat_config(chat_id, context = False, command = False, fullDetail = False) -> None:
+    select = cursor.execute("SELECT * from config WHERE chat_id = ?",(chat_id,))
+    rows = select.fetchall()
+    configDict = {}
+    for row in rows:
+        add_values_in_dict(configDict,row[1],[row[2], row[3], row[4], row[5]])
 
-def set_chat_config() -> None:
-    pass
+    # Standard use, pulled by chat_polling() normally
+    if command == False:
+        return configDict
+    
+    # User invoked via /config
+    elif command == True: 
+        harryPotterConfig = ""
+        marvinConfig = ""
+        rollConfig = ""
+        otherConfig = ""
+        for config_name,config_values in configDict.items():
+            # Check Config Groupings
+            if config_values[0] == "Harry Potter":
+                if fullDetail == True:
+                    harryPotterConfig += "<b>Name:</b> " + config_name + " <b>Value:</b> " + config_values[1] + "\n<i>" + config_values[2] + "</i>\n\n"
+                else:
+                    harryPotterConfig += "<b>Name:</b> " + config_name + " <b>Value:</b> " + config_values[1] + "\n"
+            elif config_values[0] == "Marvin":
+                if fullDetail == True:
+                    marvinConfig += "<b>Name:</b> " + config_name + " <b>Value:</b> " + config_values[1] + "\n<i>" + config_values[2] + "</i>\n\n"
+                else:
+                    marvinConfig += "<b>Name:</b> " + config_name + " <b>Value:</b> " + config_values[1] + "\n"
+            elif config_values[0] == "Roll":
+                if fullDetail == True:
+                    rollConfig += "<b>Name:</b> " + config_name + " <b>Value:</b> " + config_values[1] + "\n<i>" + config_values[2] + "</i>\n\n"
+                else:
+                    rollConfig += "<b>Name:</b> " + config_name + " <b>Value:</b> " + config_values[1] + "\n"
+            else: 
+                if fullDetail == True:
+                    otherConfig += "<b>Name:</b> " + config_name + " <b>Value:</b> " + config_values[1] + "\n<i>" + config_values[2] + "</i>\n\n"
+                else:
+                    otherConfig += "<b>Name:</b> " + config_name + " <b>Value:</b> " + config_values[1] + "\n"
+        
+        messageinfo = context.bot.send_message(chat_id, text="<b>HP REPUTATION CONFIG:</b>\n" + harryPotterConfig + "<b>MARVIN CONFIG</b>:\n" + marvinConfig + "<b>ROLL CONFIG:</b>\n" + rollConfig + "<b>OTHER CONFIG:</b>\n" + otherConfig + "<i>\nConfig Notes:</i>\nIf you're unsure what a config is, get more detail with either: \n<i>/config full</i> \nor\n <i>/config config_name</i>\n\nTo set a new value for any config item, use:\n <i>/config config_name new_value</i>", parse_mode=ParseMode.HTML)
+        
+def set_chat_config(chat_id,config_to_update,new_value,context,configDict) -> None:
+    try:
+        if configDict[config_to_update]:
+            for key, value in configDict.items():
+                if key == config_to_update:
+                    if value[3] == "boolean":
+                        if new_value.lower() in ['yes','no']:
+                            cursor.execute("UPDATE config SET config_value = ? WHERE config_name = ? AND chat_id = ?",(new_value.lower(),config_to_update,chat_id))
+                            db.commit()
+                            messageinfo = context.bot.send_message(chat_id, text=config_to_update + " updated.")
+                        else:
+                            messageinfo = context.bot.send_message(chat_id, text="Sorry that config only takes values of 'yes' or 'no'.")
+
+                    elif value[3] == "int":
+                        if new_value.isnumeric() and int(new_value) > 0:
+                            new_value = int(new_value)
+                            cursor.execute("UPDATE config SET config_value = ? WHERE config_name = ? AND chat_id = ?",(new_value,config_to_update,chat_id))
+                            db.commit()
+                            messageinfo = context.bot.send_message(chat_id, text=config_to_update + " updated.")
+                        else: 
+                            messageinfo = context.bot.send_message(chat_id, text="Sorry that config only takes positive numbers as a value.")
+    except:
+        messageinfo = context.bot.send_message(chat_id, text="Sorry that config name doesn't exist or something else went wrong.")
 
 def config_command(update: Update, context: CallbackContext) -> None:
-    pass
+    user_id = update.message.from_user.id
+    chat_id = update.message.chat_id
+    user_detail = activity_status_check(user_id,chat_id,context)
+    user_status = user_detail[0]
+    command = update.message.text.split()
+
+    if user_status in ("creator","administrator"):
+        # Just the /config command
+        if len(update.message.text.split()) == 1:
+            get_chat_config(chat_id,context,True, False)
+        # /config <config_name> <new_value>
+        elif len(update.message.text.split()) == 2:
+            if command[1].lower() == "full":
+                get_chat_config(chat_id,context,True, True)
+            else: 
+                chat_config = get_chat_config(chat_id)
+                for config_name,config_values in chat_config.items():
+                    if config_name == command[1]:
+                        messageinfo = context.bot.send_message(chat_id, text="<b>Name: </b>" + config_name + "\n<b>Value:</b> " + config_values[1] + "\n<b>Description: </b>" + config_values[2], parse_mode=ParseMode.HTML)
+        # /config <config_name> <new_value>
+        elif len(update.message.text.split()) == 3:
+            configDict = get_chat_config(chat_id)
+            set_chat_config(chat_id,command[1],command[2],context,configDict)
+        else:
+            messageinfo = context.bot.send_message(chat_id, text="Hmm. Command doesn't look right. Try /config on it's own for more information.")
+
+    else: 
+        messageinfo = context.bot.send_message(chat_id, text="Sorry config commands are Admin only!")
 
 def broadcast_command() -> None:
     # Old code from TriggerBot.py - this needs completely reworked
