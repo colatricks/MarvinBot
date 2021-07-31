@@ -782,7 +782,7 @@ def hp_totals(chat_id, term_id, term_end, timestamp, context, query_type="Standa
                 house_champion_user = houseelf_user_detail[1].user.mention_markdown()
                 house_champion_points = points_Houseelf
 
-            messageinfo = context.bot.send_message(chat_id, text=f"✨✨✨ *END OF TERM!* ✨✨✨\n\nThe winner of this terms House Cup with a total of *{house_champion_points} points* ...\n\n{house_champion}\n\nAlso a huge congratulations to each of this terms ... \n\n⚔️*House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_points}\n🐍: {slytherin_sentence} {slytherin_points}\n🦡: {hufflepuff_sentence} {hufflepuff_points}\n🦅: {ravenclaw_sentence} {ravenclaw_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_points}\n\n*Points have been reset and a new term has begun!*", parse_mode="Markdown")
+            messageinfo = context.bot.send_message(chat_id, text=f"✨✨✨ *END OF TERM!* ✨✨✨\n\nThe winner of this terms House Cup with a total of *{house_champion_points} points* ...\n\n{house_champion}\n\nAlso a huge congratulations to each of this terms ... \n\n⚔️*House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_champion_points}\n🐍: {slytherin_sentence} {slytherin_champion_points}\n🦡: {hufflepuff_sentence} {hufflepuff_champion_points}\n🦅: {ravenclaw_sentence} {ravenclaw_champion_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_champion_points}\n\n*Points have been reset and a new term has begun!*", parse_mode="Markdown")
             context.bot.pin_chat_message(chat_id,messageinfo.message_id)
             return house_champion, house_champion_points, house_champion_user, house_champion_points
         log_bot_message(messageinfo.message_id,chat_id,timestamp,9000)
