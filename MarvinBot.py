@@ -663,27 +663,28 @@ def hp_totals(chat_id, term_id, term_end, timestamp, context, query_type="Standa
     if rows:
         for row in rows:
             user_detail = activity_status_check(row[0],chat_id,context)
-            user_status = (context.bot.get_chat_member(chat_id,user_detail[1].user.id)).status
-            if user_status in ("member","creator","administrator"):
-                user_house = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? AND user_id = ?",(chat_id,user_detail[1].user.id))
-                user_house = user_house.fetchone()
-                user_points = row[2]
+            if user_detail[0] != 0:
+                user_status = (context.bot.get_chat_member(chat_id,user_detail[1].user.id)).status
+                if user_status in ("member","creator","administrator"):
+                    user_house = cursor.execute("SELECT hp_house FROM users WHERE chat_id = ? AND user_id = ?",(chat_id,user_detail[1].user.id))
+                    user_house = user_house.fetchone()
+                    user_points = row[2]
 
-                if user_house[0] == "Gryffindor":
-                    points_Gryffindor += user_points
-                elif user_house[0] == "Slytherin":
-                    points_Slytherin += user_points
-                elif user_house[0] == "Hufflepuff":
-                    points_Hufflepuff += user_points
-                elif user_house[0] == "Ravenclaw":
-                    points_Ravenclaw += user_points
-                elif user_house[0] == "Houseelf":
-                    points_Houseelf += user_points
+                    if user_house[0] == "Gryffindor":
+                        points_Gryffindor += user_points
+                    elif user_house[0] == "Slytherin":
+                        points_Slytherin += user_points
+                    elif user_house[0] == "Hufflepuff":
+                        points_Hufflepuff += user_points
+                    elif user_house[0] == "Ravenclaw":
+                        points_Ravenclaw += user_points
+                    elif user_house[0] == "Houseelf":
+                        points_Houseelf += user_points
+                    else: 
+                        points_Muggles += user_points
                 else: 
-                    points_Muggles += user_points
-            else: 
-                cursor.execute("UPDATE users SET status = 'left' WHERE user_id = ? AND chat_id = ?",(str(user_detail[1].user.id),chat_id))
-                db.commit()
+                    cursor.execute("UPDATE users SET status = 'left' WHERE user_id = ? AND chat_id = ?",(str(user_detail[1].user.id),chat_id))
+                    db.commit()
 
 
         # Create points list, sort it, format it.
