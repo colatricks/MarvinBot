@@ -1002,9 +1002,14 @@ def del_bot_message(chat_id, context):
             created_date = datetime.strptime(row[2], '%Y-%m-%d %H:%M:%S')
             target_date = created_date + timedelta(seconds=int(duration))
             if time > target_date:
-                context.bot.delete_message(chat_id,message_id)
-                cursor.execute("DELETE FROM bot_service_messages WHERE chat_id = ? AND message_id = ?",(chat_id,message_id))
-                db.commit()
+                try: 
+                    context.bot.delete_message(chat_id,message_id)
+                    cursor.execute("DELETE FROM bot_service_messages WHERE chat_id = ? AND message_id = ?",(chat_id,message_id))
+                    db.commit()
+                except:
+                    print("Message ID " + message_id + " not found, deleting from database.")
+                    cursor.execute("DELETE FROM bot_service_messages WHERE chat_id = ? AND message_id = ?",(chat_id,message_id))
+                    db.commit()
 
 # Roll functionality
 # User can either send a simple '/roll' command which will default to a single eight sided die or,
