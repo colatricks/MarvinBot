@@ -13,6 +13,8 @@ USAGE:
 - pip install -r requirements.txt
 - Rename .env.example to .env - update with your Telegram Bot Token
 - Rename rollSass.json.example to rollSass.json and Sass.json.example to Sass.json - feel free to add your own snark/personality.
+- Launch with 'python3 MarvinBot.py
+- Group configuration can be controlled by /config from inside the group.
 
 FEATURES: 
 - Dice Roll (/roll or /roll XdY e.g /roll 2d8)
@@ -81,6 +83,8 @@ def db_initialise(chat_id) -> None:
     cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_points' ('user_id' INTEGER NOT NULL, chat_id INT NOT NULL, 'points' INT NOT NULL, 'timestamp' TEXT NOT NULL, 'term_id' TEXT NOT NULL)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_terms' ('chat_id' INT NOT NULL, 'term_id' TEXT NOT NULL, 'start_date' TEXT NOT NULL, 'end_date' TEXT NOT NULL, 'is_current' INT NOT NULL)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_past_winners' ('chat_id' INT NOT NULL, 'winning_house' TEXT NOT NULL, 'house_points_total' INT NOT NULL, 'house_champion' TEXT NOT NULL, 'champion_points_total' INT NOT NULL)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_config' ('chat_id' INT NOT NULL, 'config_name' TEXT NOT NULL, 'affected_entity' TEXT NOT NULL, 'expiry_time' TEXT NOT NULL)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_counters' ('chat_id' INT NOT NULL, 'counter_name' TEXT NOT NULL, 'counter_value' TEXT NOT NULL)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL, 'duration' INT, 'type' TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'config' ('chat_id' INT NOT NULL, 'config_name' TEXT NOT NULL, 'config_group' TEXT NOT NULL, 'config_value' TEXT NOT NULL, 'config_description' TEXT NOT NULL, 'config_type' TEXT NOT NULL)")
 
@@ -88,11 +92,11 @@ def db_initialise(chat_id) -> None:
     cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"roll_enabled","Roll","yes","Toggles the /roll function - options are Yes/No","boolean",chat_id,"roll_enabled"))
     cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"reputation_enabled","Harry Potter","yes","Toggles the +/- reputation system - options are Yes/No","boolean",chat_id,"reputation_enabled"))
     cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"marvin_sass_enabled","Marvin","yes","Toggles Marvins random chatter and poll comments - options are Yes/No","boolean",chat_id,"marvin_sass_enabled"))
-    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"marvin_sass_frequency","Marvin","10","How many messages between Marvin chatter","int",chat_id,"marvin_sass_frequency"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"marvin_sass_frequency","Marvin","250","How many messages between Marvin chatter","int",chat_id,"marvin_sass_frequency"))
     cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"standard_characters_enabled","Harry Potter","yes","Toggles Standard HP Characters appearances. reputation_enabled must be Yes.","boolean",chat_id,"standard_characters_enabled"))
     cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"standard_characters_frequency","Harry Potter","500","How many messages between Standard characters appearance","int",chat_id,"standard_characters_frequency"))
     cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"epic_characters_enabled","Harry Potter","yes","Toggles Epic HP Characters appearances. reputation_enabled must be Yes.","boolean",chat_id,"epic_characters_enabled"))
-    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"epic_characters_frequency","Harry Potter","1000","How many messages between Epic characters appearance","int",chat_id,"epic_characters_frequency"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"epic_characters_frequency","Harry Potter","1200","How many messages between Epic characters appearance","int",chat_id,"epic_characters_frequency"))
 
 # HELPERS
 # Make timestamps pretty again
@@ -105,40 +109,71 @@ def pretty_date(time=False):
     """
     now = datetime.now()
     if type(time) is int:
-        diff = now - datetime.fromtimestamp(time)
+        if datetime.fromtimestamp(time) < now:
+            diff = now - datetime.fromtimestamp(time)
+            future = False
+        elif datetime.fromtimestamp(time) > now:
+            diff = datetime.fromtimestamp(time) - now
+            future = True
     elif isinstance(time,datetime):
-        diff = now - time
+        if time < now:
+            diff = now - time
+            future = False
+        elif time > now:
+            diff = time - now
+            future = True
     elif not time:
         diff = now - now
+
     second_diff = diff.seconds
     day_diff = diff.days
 
-    if day_diff < 0:
-        day_diff = abs(day_diff)
-        return " around " + str(day_diff) + " days time"
-
-    if day_diff == 0:
-        if second_diff < 10:
-            return "just now"
-        if second_diff < 60:
-            return str(second_diff) + " seconds ago"
-        if second_diff < 120:
-            return "a minute ago"
-        if second_diff < 3600:
-            return str(second_diff // 60) + " minutes ago"
-        if second_diff < 7200:
-            return "an hour ago"
-        if second_diff < 86400:
-            return str(second_diff // 3600) + " hours ago"
-    if day_diff == 1:
-        return "Yesterday"
-    if day_diff < 7:
-        return str(day_diff) + " days ago"
-    if day_diff < 31:
-        return str(day_diff // 7) + " weeks ago"
-    if day_diff < 365:
-        return str(day_diff // 30) + " months ago"
-    return str(day_diff // 365) + " years ago"
+    if future == False:
+        if day_diff == 0:
+            if second_diff < 10:
+                return "just now"
+            if second_diff < 60:
+                return str(second_diff) + " seconds ago"
+            if second_diff < 120:
+                return "a minute ago"
+            if second_diff < 3600:
+                return str(second_diff // 60) + " minutes ago"
+            if second_diff < 7200:
+                return "an hour ago"
+            if second_diff < 86400:
+                return str(second_diff // 3600) + " hours ago"
+        if day_diff == 1:
+            return "Yesterday"
+        if day_diff < 7:
+            return str(day_diff) + " days ago"
+        if day_diff < 31:
+            return str(day_diff // 7) + " weeks ago"
+        if day_diff < 365:
+            return str(day_diff // 30) + " months ago"
+        return str(day_diff // 365) + " years ago"
+    elif future == True:
+        if day_diff == 0:
+            if second_diff < 10:
+                return "in a few seconds"
+            if second_diff < 60:
+                return str(second_diff) + " seconds"
+            if second_diff < 120:
+                return "a minute"
+            if second_diff < 3600:
+                return str(second_diff // 60) + " minutes"
+            if second_diff < 7200:
+                return "an hour ago"
+            if second_diff < 86400:
+                return str(second_diff // 3600) + " hours"
+        if day_diff == 1:
+            return "Tomorrow"
+        if day_diff < 7:
+            return str(day_diff) + " days"
+        if day_diff < 31:
+            return str(day_diff // 7) + " weeks"
+        if day_diff < 365:
+            return str(day_diff // 30) + " months"
+        return str(day_diff // 365) + " years"        
 
 def add_values_in_dict(sample_dict, key, list_of_values):
     # Append multiple values to a key in the given dictionary
@@ -550,9 +585,16 @@ def hp_points(update,context,chat_id,timestamp) -> None:
     senderHouse = hp_get_user_house(chat_id,from_user_id)
     receiverHouse = hp_get_user_house(chat_id,to_user_id)
 
+    # Rules Check
+    outcome = hp_rules_checker(chat_id,context,to_user_id)
+
     # Check if message was positive or not
     if update.message.text in positive:
-        hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"positive",1,"from_user",update,context,senderHouse,receiverHouse)
+        if outcome[0] == "bellatrix_block":
+            messageinfo = context.bot.send_message(chat_id, text="*The house of " + receiverHouse + " is cursed by Bellatrix*!\n\n" + receiverHouse + " can't receive points. The curse ends in around " + pretty_date(outcome[1]), parse_mode='markdown')
+            log_bot_message(messageinfo.message_id,chat_id,outcome[1], short_duration)
+        else: 
+            hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"positive",1,"from_user",update,context,senderHouse,receiverHouse)
     elif update.message.text in negative:
         hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"negative",-1,"from_user",update,context,senderHouse,receiverHouse)
 
@@ -562,6 +604,10 @@ def hp_allocate_points(chat_id,timestamp,to_user_id,term_id,positive_negative,po
     select = cursor.execute("SELECT points FROM hp_points WHERE chat_id = ? AND term_id = ? and user_id = ?",(chat_id,term_id,to_user_id))
     rows = select.fetchone()
 
+    # Rules Check
+    outcome = hp_rules_checker(chat_id,context,to_user_id)
+    if outcome[0] == "dumbledore_boost" and positive_negative == "positive":
+        points_allocated = points_allocated * 2
 
     if rows:
         current_points = rows[0]
@@ -574,7 +620,10 @@ def hp_allocate_points(chat_id,timestamp,to_user_id,term_id,positive_negative,po
         db.commit()
     
     if from_who == "from_user" and positive_negative == "positive":
-        messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown')
+        if points_allocated > 1:
+            messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " " + str(points_allocated) + " House points due to the *Engorgio* spell cast by *Dumbledore*!\n\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown')
+        else:
+            messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown')
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
     elif from_who == "from_user" and positive_negative == "negative":
         messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has deducted " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown' )
@@ -618,9 +667,18 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
 
                     # Get Current Points                   
                     if int(command[2]) > 0:
-                        current_points = hp_allocate_points(chat_id,timestamp,user_detail[1].user.id,term_id,"positive",int(command[2]),"from_admin",update,context,None,receiverHouse)
-                        messageinfo = context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " of " + receiverHouse + " has been awarded " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points),parse_mode='markdown' )
-                        log_bot_message(messageinfo.message_id,chat_id,timestamp)
+                        outcome = hp_rules_checker(chat_id,context,user_detail[1].user.id)
+                        if outcome[0] == "bellatrix_block":
+                            messageinfo = context.bot.send_message(chat_id, text="*The house of " + receiverHouse + " is cursed by Bellatrix*!\n\n" + receiverHouse + " can't receive points. The curse ends in around " + pretty_date(outcome[1]), parse_mode='markdown')
+                            log_bot_message(messageinfo.message_id,chat_id,outcome[1], short_duration)
+                        elif outcome[0] == "dumbledore_boost":
+                            current_points = hp_allocate_points(chat_id,timestamp,user_detail[1].user.id,term_id,"positive",int(command[2]),"from_admin",update,context,None,receiverHouse)
+                            messageinfo = context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " of " + receiverHouse + " has been awarded " + str(int(command[2]) * 2) + " House points due to the *Engorgio* spell cast by *Dumbledore*!\nTheir new total for this Term is: " + str(current_points),parse_mode='markdown' )
+                            log_bot_message(messageinfo.message_id,chat_id,timestamp)
+                        else:
+                            current_points = hp_allocate_points(chat_id,timestamp,user_detail[1].user.id,term_id,"positive",int(command[2]),"from_admin",update,context,None,receiverHouse)
+                            messageinfo = context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " of " + receiverHouse + " has been awarded " + str(command[2]) + " House points!\nTheir new total for this Term is: " + str(current_points),parse_mode='markdown' )
+                            log_bot_message(messageinfo.message_id,chat_id,timestamp)
                     elif int(command[2]) == 0:
                         messageinfo = context.bot.send_message(chat_id, text=user_detail[1].user.mention_markdown() + " of " + receiverHouse + " has been um ... awarded no extra House points.",parse_mode='markdown' )
                         log_bot_message(messageinfo.message_id,chat_id,timestamp)
@@ -752,9 +810,9 @@ def hp_totals(chat_id, term_id, term_end, timestamp, context, query_type="Standa
             select = cursor.execute("SELECT * FROM hp_past_winners WHERE chat_id = ?",(chat_id,))
             rows = select.fetchone()
             if rows:
-                messageinfo = context.bot.send_message(chat_id, text=f"🏰 *House Points Totals* 🏰\n{sentenceHouse}\nPoints wasted by Filthy Muggles: {points_Muggles}\n\n⚔️*Current House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_champion_points}\n🐍: {slytherin_sentence} {slytherin_champion_points}\n🦡: {hufflepuff_sentence} {hufflepuff_champion_points}\n🦅: {ravenclaw_sentence} {ravenclaw_champion_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_champion_points}\n\n*Last Terms Winning House & Champion:*\n{rows[1]}\n{rows[3]} with {rows[4]} points!\n\n*This term ends in{prettyDate}*", parse_mode="Markdown")
+                messageinfo = context.bot.send_message(chat_id, text=f"🏰 *House Points Totals* 🏰\n{sentenceHouse}\nPoints wasted by Filthy Muggles: {points_Muggles}\n\n⚔️*Current House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_champion_points}\n🐍: {slytherin_sentence} {slytherin_champion_points}\n🦡: {hufflepuff_sentence} {hufflepuff_champion_points}\n🦅: {ravenclaw_sentence} {ravenclaw_champion_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_champion_points}\n\n*Last Terms Winning House & Champion:*\n{rows[1]}\n{rows[3]} with {rows[4]} points!\n\n*This term ends in {prettyDate}*", parse_mode="Markdown")
             else:
-                messageinfo = context.bot.send_message(chat_id, text=f"🏰 *House Points Totals* 🏰\n{sentenceHouse}\nPoints wasted by Filthy Muggles: {points_Muggles}\n\n⚔️*Current House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_champion_points}\n🐍: {slytherin_sentence} {slytherin_champion_points}\n🦡: {hufflepuff_sentence} {hufflepuff_champion_points}\n🦅: {ravenclaw_sentence} {ravenclaw_champion_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_champion_points}\n\n*This term ends in{prettyDate}*", parse_mode="Markdown")
+                messageinfo = context.bot.send_message(chat_id, text=f"🏰 *House Points Totals* 🏰\n{sentenceHouse}\nPoints wasted by Filthy Muggles: {points_Muggles}\n\n⚔️*Current House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_champion_points}\n🐍: {slytherin_sentence} {slytherin_champion_points}\n🦡: {hufflepuff_sentence} {hufflepuff_champion_points}\n🦅: {ravenclaw_sentence} {ravenclaw_champion_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_champion_points}\n\n*This term ends in {prettyDate}*", parse_mode="Markdown")
         # If End of Term do other stuff
         elif query_type == "EndTerm":
             house_champion_points = list(points_list.values())[0]
@@ -786,6 +844,8 @@ def hp_totals(chat_id, term_id, term_end, timestamp, context, query_type="Standa
             messageinfo = context.bot.send_message(chat_id, text=f"✨✨✨ *END OF TERM!* ✨✨✨\n\nThe winner of this terms House Cup with a total of *{house_champion_points} points* ...\n\n{house_champion}\n\nAlso a huge congratulations to each of this terms ... \n\n⚔️*House Champions*⚔️\n🦁: {gryffindor_sentence} {gryffindor_champion_points}\n🐍: {slytherin_sentence} {slytherin_champion_points}\n🦡: {hufflepuff_sentence} {hufflepuff_champion_points}\n🦅: {ravenclaw_sentence} {ravenclaw_champion_points}\n🧝‍♀️: {houseelf_sentence} {houseelf_champion_points}\n\n*Points have been reset and a new term has begun!*", parse_mode="Markdown")
             context.bot.pin_chat_message(chat_id,messageinfo.message_id)
             return house_champion, house_champion_points, house_champion_user, house_champion_points
+        elif query_type == "GeneralTotals":
+            return points_list
         log_bot_message(messageinfo.message_id,chat_id,timestamp,9000)
     else: 
         messageinfo = context.bot.send_message(chat_id, text="It appears nobody has earned any points this term!")
@@ -822,10 +882,13 @@ def hp_tags(update: Update, context: CallbackContext) -> None:
         messageinfo = context.bot.send_message(chat_id, text="Yer not a Wizard Harry ... or ... an Admin ... " + user_detail[1].user.mention_markdown(), parse_mode='markdown')
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
 
-def hp_character_appearance(chat_id,update,context,timestamp,term_id,user=False) -> None:
+def hp_character_appearance(chat_id,update,context,timestamp,term_id,user=False,standard_or_epic = "Standard") -> None:
 
     if user == False:
-        hp_random_character(chat_id,context,update,timestamp,term_id)
+        if standard_or_epic == "Standard":
+            hp_random_character(chat_id,context,update,timestamp,term_id)
+        elif standard_or_epic == "Epic":
+            hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epic)
 
     elif user == True:
         # Used to handle user responses to game prompts
@@ -857,12 +920,14 @@ def hp_character_appearance(chat_id,update,context,timestamp,term_id,user=False)
                 # Message no longer exists, do nothing (or maybe let the user know? Not sure yet.)
                 pass
 
-def hp_random_character(chat_id,context,update,timestamp,term_id) -> None:
+def hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epic) -> None:
     total_standard_characters = 7
     random_standard_char = random.randint(1, total_standard_characters)
+    
+    total_epic_characters = 4
+    random_epic_char = random.randint(4, total_epic_characters)
 
-    # Get the sticker set to pull associated file_id's
-    # Might need to store these in the DB eventually, will see how quick/slow it is.
+    # Get the sticker set(s) to pull associated file_id's
 
     # Main Sticker Set
     sticker_set = context.bot.get_sticker_set("BoyWhoLived")
@@ -873,20 +938,30 @@ def hp_random_character(chat_id,context,update,timestamp,term_id) -> None:
             snape_file_id = sticker.file_id 
         elif sticker.emoji == "😜":
             slughorn_file_id = sticker.file_id 
-        elif sticker.emoji == "🤔":
-            filch_file_id = sticker.file_id 
+        elif sticker.emoji == "👍":
+            harry_file_id = sticker.file_id 
         elif sticker.emoji == "🔮":
             trelawney_file_id = sticker.file_id 
         elif sticker.emoji == "😁":
             umbridge_file_id = sticker.file_id
         elif sticker.emoji == "😉":
             buckbeak_file_id = sticker.file_id
+        elif sticker.emoji == "😎":
+            dumbledore_file_id = sticker.file_id
+        elif sticker.emoji == "🖕":
+            bellatrix_file_id = sticker.file_id
     
     # Extra Ones Made Manually
     sticker_set = context.bot.get_sticker_set("PotterAdditional")
     for sticker in sticker_set.stickers:
         if sticker.emoji == "👾":
             troll_file_id = sticker.file_id
+
+    # Voldemort Extras
+    sticker_set = context.bot.get_sticker_set("Lord_Voldemort")
+    for sticker in sticker_set.stickers:
+        if sticker.emoji == "😂":
+            voldemort_file_id = sticker.file_id
 
     # Get Most Recent Message ID
     select = cursor.execute("SELECT * FROM bot_service_messages WHERE chat_id = ? AND type = ?",(chat_id,"MostRecent"))
@@ -897,83 +972,231 @@ def hp_random_character(chat_id,context,update,timestamp,term_id) -> None:
         receiverHouse = hp_get_user_house(chat_id,most_recent_user_id)
     user_detail = activity_status_check(most_recent_user_id,chat_id,context)
 
-    # Random STANDARD Characters
-    if random_standard_char == 1:
-        # Golden Snitch Game
-        # Reply logic for Snitch game is in hp_character_appearance()
-        messageinfo = context.bot.send_sticker(chat_id, sticker=snitch_file_id)
-        log_bot_message(messageinfo.message_id,chat_id,timestamp,172800,"Snitch_Sticker","open")
-        messageinfo = context.bot.send_message(chat_id, text="*Quick!\n\nThe Golden Snitch just flew past your head!*\n\n_Reply to this message_ with '*CAUGHT IT!*' to catch it!", parse_mode='markdown')
-        log_bot_message(messageinfo.message_id,chat_id,timestamp,172800,"Snitch","open")
-    elif random_standard_char == 2:
-        # Snape Unimpressed
-        current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"negative",-10,"from_admin",update,context,None,receiverHouse)
-        context.bot.send_sticker(chat_id, sticker=snape_file_id, reply_to_message_id=most_recent_message_id)
-        messageinfo = context.bot.send_message(chat_id, text="*Professor Snape is unimpressed!\n\n*He deducts 10 points from " + user_detail[1].user.mention_markdown() + "of " + receiverHouse + "\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
-    elif random_standard_char == 3:
-        # Trelawney
-        # Get Random User ID for Trelawney because she's a bit weird
-        select = cursor.execute("SELECT * FROM users WHERE chat_id = ? AND status NOT IN ('kicked','left') ORDER BY RANDOM() LIMIT 1",(chat_id,))
-        row = select.fetchone()
-        if row:
-            random_user_id = row[0]
-            user_detail = activity_status_check(random_user_id,chat_id,context)
-        current_points = hp_allocate_points(chat_id,timestamp,random_user_id,term_id,"positive",10,"from_admin",update,context,None,receiverHouse)
-        context.bot.send_sticker(chat_id, sticker=trelawney_file_id)
-        messageinfo = context.bot.send_message(chat_id, text="*Sybill Trelawney sees ... points ... in someones future ... but she's not sure ... who!?*\n\nShe randomly gives " + user_detail[1].user.mention_markdown() + " of " + receiverHouse + " 10 points!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
-    elif random_standard_char == 4:
-        # Umbridge
-        current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"negative",-2,"from_admin",update,context,None,receiverHouse)
-        context.bot.send_sticker(chat_id, sticker=umbridge_file_id, reply_to_message_id=most_recent_message_id)
-        messageinfo = context.bot.send_message(chat_id, text="*Dolores Umbridge thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + "* is a Muggle-Born!*\n\nShe deducts 2 points from them!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
-    elif random_standard_char == 5:
-        # Slughorn
-        current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"positive",2,"from_admin",update,context,None,receiverHouse)
-        context.bot.send_sticker(chat_id, sticker=slughorn_file_id, reply_to_message_id=most_recent_message_id)
-        messageinfo = context.bot.send_message(chat_id, text="*Professor Slughorn thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " *looks lucky today!*\n\nHe awards them 2 points!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
-    elif random_standard_char == 6:
-        # Troll
-        # Troll has wide area of effect, hits three people
-        select = cursor.execute("SELECT * FROM users WHERE chat_id = ? AND status NOT IN ('kicked','left') ORDER BY RANDOM() LIMIT 3",(chat_id,))
-        rows = select.fetchall()
-        userList = []
-        for row in rows:
-            user_id = row[0]
-            user_detail = activity_status_check(user_id,chat_id,context)
-            current_points = hp_allocate_points(chat_id,timestamp,user_id,term_id,"negative",-5,"from_admin",update,context,None,receiverHouse)
-            receiverHouse = hp_get_user_house(chat_id,user_id)
-            sentence = user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " (New Total: " + str(current_points) + ")"
-            userList.append(sentence)
-        sentenceList = "\n".join(userList)
-        context.bot.send_sticker(chat_id, sticker=troll_file_id)
-        messageinfo = context.bot.send_message(chat_id, text="*TROLLLL IN THE DUNGEON!*\n\nHe swings his club and hits the following for 5 points:\n\n" + sentenceList, parse_mode='markdown')
-    elif random_standard_char == 7:
-        # Buckbeak
-        # Troll has wide area of effect, hits three people
-        select = cursor.execute("SELECT * FROM users WHERE chat_id = ? AND status NOT IN ('kicked','left') ORDER BY RANDOM() LIMIT 3",(chat_id,))
-        rows = select.fetchall()
-        userList = []
-        for row in rows:
-            user_id = row[0]
-            user_detail = activity_status_check(user_id,chat_id,context)
-            current_points = hp_allocate_points(chat_id,timestamp,user_id,term_id,"positive",5,"from_admin",update,context,None,receiverHouse)
-            receiverHouse = hp_get_user_house(chat_id,user_id)
-            sentence = user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " (New Total: " + str(current_points) + ")"
-            userList.append(sentence)
-        sentenceList = "\n".join(userList)
-        context.bot.send_sticker(chat_id, sticker=buckbeak_file_id)
-        messageinfo = context.bot.send_message(chat_id, text="*Buckbeak has landed nearby!*\n\nApproaching carefully, the following are granted 5 points:\n\n" + sentenceList, parse_mode='markdown')
+    if standard_or_epic == "Standard":
+        # Random STANDARD Characters
+        if random_standard_char == 1:
+            # Golden Snitch Game
+            # Reply logic for Snitch game is in hp_character_appearance()
+            messageinfo = context.bot.send_sticker(chat_id, sticker=snitch_file_id)
+            log_bot_message(messageinfo.message_id,chat_id,timestamp,172800,"Snitch_Sticker","open")
+            messageinfo = context.bot.send_message(chat_id, text="*Quick!\n\nThe Golden Snitch just flew past your head!*\n\n_Reply to this message_ with '*CAUGHT IT!*' to catch it!", parse_mode='markdown')
+            log_bot_message(messageinfo.message_id,chat_id,timestamp,172800,"Snitch","open")
+        elif random_standard_char == 2:
+            # Snape Unimpressed
+            current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"negative",-10,"from_admin",update,context,None,receiverHouse)
+            context.bot.send_sticker(chat_id, sticker=snape_file_id, reply_to_message_id=most_recent_message_id)
+            messageinfo = context.bot.send_message(chat_id, text="*Professor Snape is unimpressed!\n\n*He deducts 10 points from " + user_detail[1].user.mention_markdown() + "of " + receiverHouse + "\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
+        elif random_standard_char == 3:
+            # Trelawney
+            # Get Random User ID for Trelawney because she's a bit weird
+            select = cursor.execute("SELECT * FROM users WHERE chat_id = ? AND status NOT IN ('kicked','left') ORDER BY RANDOM() LIMIT 1",(chat_id,))
+            row = select.fetchone()
+            if row:
+                random_user_id = row[0]
+                user_detail = activity_status_check(random_user_id,chat_id,context)
+            current_points = hp_allocate_points(chat_id,timestamp,random_user_id,term_id,"positive",10,"from_admin",update,context,None,receiverHouse)
+            context.bot.send_sticker(chat_id, sticker=trelawney_file_id)
+            messageinfo = context.bot.send_message(chat_id, text="*Sybill Trelawney sees ... points ... in someones future ... but she's not sure ... who!?*\n\nShe randomly gives " + user_detail[1].user.mention_markdown() + " of " + receiverHouse + " 10 points!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
+        elif random_standard_char == 4:
+            # Umbridge
+            current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"negative",-2,"from_admin",update,context,None,receiverHouse)
+            context.bot.send_sticker(chat_id, sticker=umbridge_file_id, reply_to_message_id=most_recent_message_id)
+            messageinfo = context.bot.send_message(chat_id, text="*Dolores Umbridge thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + "* is a Muggle-Born!*\n\nShe deducts 2 points from them!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
+        elif random_standard_char == 5:
+            # Slughorn
+            current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"positive",2,"from_admin",update,context,None,receiverHouse)
+            context.bot.send_sticker(chat_id, sticker=slughorn_file_id, reply_to_message_id=most_recent_message_id)
+            messageinfo = context.bot.send_message(chat_id, text="*Professor Slughorn thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " *looks lucky today!*\n\nHe awards them 2 points!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
+        elif random_standard_char == 6:
+            # Troll
+            # Troll has wide area of effect, hits three people
+            select = cursor.execute("SELECT * FROM users WHERE chat_id = ? AND status NOT IN ('kicked','left') ORDER BY RANDOM() LIMIT 3",(chat_id,))
+            rows = select.fetchall()
+            userList = []
+            for row in rows:
+                user_id = row[0]
+                user_detail = activity_status_check(user_id,chat_id,context)
+                current_points = hp_allocate_points(chat_id,timestamp,user_id,term_id,"negative",-5,"from_admin",update,context,None,receiverHouse)
+                receiverHouse = hp_get_user_house(chat_id,user_id)
+                sentence = user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " (New Total: " + str(current_points) + ")"
+                userList.append(sentence)
+            sentenceList = "\n".join(userList)
+            context.bot.send_sticker(chat_id, sticker=troll_file_id)
+            messageinfo = context.bot.send_message(chat_id, text="*TROLLLL IN THE DUNGEON!*\n\nHe swings his club and hits the following for 5 points:\n\n" + sentenceList, parse_mode='markdown')
+        elif random_standard_char == 7:
+            # Buckbeak
+            # Troll has wide area of effect, hits three people
+            select = cursor.execute("SELECT * FROM users WHERE chat_id = ? AND status NOT IN ('kicked','left') ORDER BY RANDOM() LIMIT 3",(chat_id,))
+            rows = select.fetchall()
+            userList = []
+            for row in rows:
+                user_id = row[0]
+                user_detail = activity_status_check(user_id,chat_id,context)
+                current_points = hp_allocate_points(chat_id,timestamp,user_id,term_id,"positive",5,"from_admin",update,context,None,receiverHouse)
+                receiverHouse = hp_get_user_house(chat_id,user_id)
+                sentence = user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " (New Total: " + str(current_points) + ")"
+                userList.append(sentence)
+            sentenceList = "\n".join(userList)
+            context.bot.send_sticker(chat_id, sticker=buckbeak_file_id)
+            messageinfo = context.bot.send_message(chat_id, text="*Buckbeak has landed nearby!*\n\nApproaching carefully, the following are granted 5 points:\n\n" + sentenceList, parse_mode='markdown')
+    elif standard_or_epic == "Epic":
+        if random_epic_char == 1:
+            # Bellatrix
+            #
+            time_future = datetime.now() + timedelta(hours=4)
+            time_future = str(time_future.strftime("%Y-%m-%d %H:%M:%S"))
+
+            messageinfo = context.bot.send_sticker(chat_id, sticker=bellatrix_file_id)
+            messageinfo = context.bot.send_message(chat_id, text="*Bellatrix has marked *" + user_detail[1].user.mention_markdown() + "* and the House of " + receiverHouse + "*\n\nThey can't receive points for 4 hours!", parse_mode='markdown')
+            cursor.execute("INSERT INTO hp_config (chat_id, config_name, affected_entity, expiry_time) VALUES(?,?,?,?)",(chat_id, "bellatrix_block", receiverHouse, time_future))
+            db.commit()
+        elif random_epic_char == 2:
+            # Dumbledore
+            #
+            time_future = datetime.now() + timedelta(hours=4)
+            time_future = str(time_future.strftime("%Y-%m-%d %H:%M:%S"))
+
+            messageinfo = context.bot.send_sticker(chat_id, sticker=dumbledore_file_id)
+            messageinfo = context.bot.send_message(chat_id, text="*Dumbledore has cast Engorgio!*\n\n" + user_detail[1].user.mention_markdown() + "and the House of " + receiverHouse + " points are doubled for the next 4 hours!", parse_mode='markdown')
+            cursor.execute("INSERT INTO hp_config (chat_id, config_name, affected_entity, expiry_time) VALUES(?,?,?,?)",(chat_id, "dumbledore_boost", receiverHouse, time_future))
+            db.commit()
+        elif random_epic_char == 3:
+            # Voldemort
+            #
+
+            select = cursor.execute("SELECT * FROM hp_points WHERE chat_id = ? AND term_id = ? ORDER BY points DESC LIMIT 1",(chat_id,term_id))
+            rows = select.fetchone()
+            user_detail = activity_status_check(rows[0],chat_id,context)
+            receiverHouse = hp_get_user_house(chat_id,rows[0])
+            cursor.execute("UPDATE hp_points SET points = '0' WHERE chat_id = ? AND term_id = ? AND user_id = ?",(chat_id,term_id,rows[0]))
+            db.commit()
+            messageinfo = context.bot.send_sticker(chat_id, sticker=voldemort_file_id)
+            messageinfo = context.bot.send_message(chat_id, text="*Voldemort has struck down *" + user_detail[1].user.mention_markdown() + " of " + receiverHouse + "\n\nThey did have the most points this term with " + str(rows[2]) + "\n\nTheir points have been set to zero!", parse_mode='markdown')
+        elif random_epic_char == 4:
+            # Harry
+            #
+            # Get Current Term
+            select = cursor.execute("SELECT * FROM hp_terms WHERE is_current = 1 AND chat_id = ?",(chat_id,))
+            rows = select.fetchone()
+            term_id = rows[1]
+            term_end = rows[3]
+
+            # Get House Totals
+            house_elf_sacrifice = False
+            totals = hp_totals(chat_id,term_id,term_end,timestamp,context,"GeneralTotals")
+            totals_items = list(totals.items())[3] # this should be the 4th house (0 = 1) 
+            if totals_items[0] == "🧝‍♀️ : ":
+                # House Elves aren't a real house ...
+                totals_items = list(totals.items())[4]
+                house_elf_sacrifice = True
+            elif totals_items[0] == "🦁 : ":
+                lowest_house = "Gryffindor"
+            elif totals_items[0] == "🦅 : ":
+                lowest_house = "Ravenclaw"
+            elif totals_items[0] == "🐍 : ":
+                lowest_house = "Slytherin"
+            elif totals_items[0] == "🦡 : ":
+                lowest_house = "Hufflepuff"
+
+            # Get Highest Points User from House with Lowest Totals
+            select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE users.hp_house = ? AND hp_points.term_id = ? AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (lowest_house,term_id,))
+            rows = select.fetchone()
+            # Possible that ^ this query returns nothing, if its early in the season it's possible only one or two houses have points so we repeat for the next nearest
+            if rows == None:
+                totals_items = list(totals.items())[2]
+                if totals_items[0] == "🧝‍♀️ : ":
+                    # House Elves aren't a real house ...
+                    totals_items = list(totals.items())[4]
+                    house_elf_sacrifice = True
+                elif totals_items[0] == "🦁 : ":
+                    lowest_house = "Gryffindor"
+                elif totals_items[0] == "🦅 : ":
+                    lowest_house = "Ravenclaw"
+                elif totals_items[0] == "🐍 : ":
+                    lowest_house = "Slytherin"
+                elif totals_items[0] == "🦡 : ":
+                    lowest_house = "Hufflepuff"
+            select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE users.hp_house = ? AND hp_points.term_id = ? AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (lowest_house,term_id,))
+            rows = select.fetchone()
+            # Possible that ^ this query returns nothing, if its early in the season it's possible only one or two houses have points so we repeat for the next nearest
+            if rows == None:
+                totals_items = list(totals.items())[1]
+                if totals_items[0] == "🧝‍♀️ : ":
+                    # House Elves aren't a real house ...
+                    totals_items = list(totals.items())[4]
+                    house_elf_sacrifice = True
+                elif totals_items[0] == "🦁 : ":
+                    lowest_house = "Gryffindor"
+                elif totals_items[0] == "🦅 : ":
+                    lowest_house = "Ravenclaw"
+                elif totals_items[0] == "🐍 : ":
+                    lowest_house = "Slytherin"
+                elif totals_items[0] == "🦡 : ":
+                    lowest_house = "Hufflepuff"
+            select = cursor.execute("SELECT users.user_id, users.hp_house, hp_points.points, hp_points.chat_id, hp_points.term_id, users.username FROM users INNER JOIN hp_points ON hp_points.user_id = users.user_id AND hp_points.chat_id = users.chat_id WHERE users.hp_house = ? AND hp_points.term_id = ? AND users.status NOT IN ('kicked', 'left') ORDER BY hp_points.points DESC LIMIT 1", (lowest_house,term_id,))
+            rows = select.fetchone()
+            if rows == None:
+                print('Give up, Mr Potter can appear again some other time.')
+            else: 
+                current_points = rows[2]
+                new_points = int(current_points) + 75
+                user_detail = activity_status_check(rows[0],chat_id,context)
+                receiverHouse = hp_get_user_house(chat_id,rows[0])
+                
+                cursor.execute("UPDATE hp_points SET points = ? WHERE chat_id = ? AND term_id = ? AND user_id = ?",(new_points,chat_id,term_id,rows[0]))
+                db.commit()
+                messageinfo = context.bot.send_sticker(chat_id, sticker=harry_file_id)
+                if house_elf_sacrifice == False:
+                    messageinfo = context.bot.send_message(chat_id, text="*Harry Potter* has awarded " + user_detail[1].user.mention_markdown() + " of " + receiverHouse + " as the best performing pupil of the lowest scoring house, 75 House points!\n\nTheir new total is " + str(new_points), parse_mode='markdown')
+                elif house_elf_sacrifice == True:
+                    messageinfo = context.bot.send_message(chat_id, text="*Harry Potter* almost awarded points to the House Elves as the lowest scoring House! However, in keeping with their manner they sacrificed themselves for the next lowest house - choosing " + user_detail[1].user.mention_markdown() + " of " + receiverHouse + " who has been granted 75 House points!", parse_mode='markdown')
 
 def hp_character_appearance_counter(chat_id,update,context,term_id,timestamp) -> None:
     global standard_character_count
+    global epic_character_count
     standard_character_count += 1
+    epic_character_count += 1
 
     chat_config = get_chat_config(chat_id)
     standard_character_total = int(chat_config['standard_characters_frequency'][1])
+    epic_character_total = int(chat_config['epic_characters_frequency'][1])
 
     if standard_character_count == standard_character_total:
         hp_character_appearance(chat_id,update,context,timestamp,term_id)
         standard_character_count = 0
+    elif epic_character_count == epic_character_total:
+        hp_character_appearance(chat_id,update,context,timestamp,term_id,False,"Epic")
+        epic_character_count = 0
+
+def hp_rules_checker(chat_id,context,user_id = None) -> None:
+    time = datetime.now()
+    time = str(time.strftime("%Y-%m-%d %H:%M:%S"))
+    
+    # Target User House
+    recipientHouse = hp_get_user_house(chat_id,user_id)
+
+    # Cleanup old blocks/rules
+    select = cursor.execute("SELECT * FROM hp_config WHERE chat_id = ?",(chat_id,))
+    rows = select.fetchall()
+    for row in rows:
+        if row[3] < time:
+            cursor.execute("DELETE FROM hp_config WHERE chat_id = ? AND expiry_time = ?",(chat_id,row[3]))
+            db.commit()
+
+    # Check if we need to do something 
+    select = cursor.execute("SELECT * FROM hp_config WHERE chat_id = ?",(chat_id,))
+    rows = select.fetchall()
+    outcome = ""
+    timestampObject = ""
+    for row in rows:
+        if row[1] == "bellatrix_block" and recipientHouse == row[2]:
+            timestampObject = datetime.strptime(row[3], '%Y-%m-%d %H:%M:%S')
+            outcome = "bellatrix_block"
+        elif row[1] == "dumbledore_boost" and recipientHouse == row[2]:
+            timestampObject = datetime.strptime(row[3], '%Y-%m-%d %H:%M:%S')
+            outcome = "dumbledore_boost"
+    
+    return outcome,timestampObject
 
 def log_bot_message(message_id, chat_id, timestamp, duration = standard_duration, type = "Standard", status = "sent") -> None:
 
@@ -1139,6 +1362,7 @@ def chat_media_polling(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
+    #print(update)
     # What sort of message have we received?
     if update.message.animation:
         file_id = update.message.animation.file_id
