@@ -925,7 +925,7 @@ def hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epi
     random_standard_char = random.randint(1, total_standard_characters)
     
     total_epic_characters = 4
-    random_epic_char = random.randint(4, total_epic_characters)
+    random_epic_char = random.randint(1, total_epic_characters)
 
     # Get the sticker set(s) to pull associated file_id's
 
