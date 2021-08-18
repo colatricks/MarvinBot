@@ -301,17 +301,26 @@ def trigger_lookup(trigger_word, chat_id) -> None:
         return 0, error
 
 def list_trigger_command(update: Update, context: CallbackContext) -> None:
-    """Removes a trigger when the /list command is used"""
     chat_id = str(update.message.chat_id)
-    select = cursor.execute("SELECT * from triggers WHERE chat_id = ?",(chat_id,))
+
+    select = cursor.execute("SELECT * from triggers WHERE chat_id = ? ORDER BY trigger_word ASC",(chat_id,))
     rows = select.fetchall()
-    triggerList = []
+    textTriggerList = []
+    stickerTriggerList = []
+    photoTriggerList = []
     if rows:
         for row in rows:
-            triggerList.append(row[0])
+            if row['trigger_response_type'] == "text":
+                textTriggerList.append(row['trigger_word'])
+            elif row['trigger_response_type'] == "sticker":
+                stickerTriggerList.append(row['trigger_word'])
+            elif row['trigger_response_type'] == "photo":
+                photoTriggerList.append(row['trigger_word'])
         
-        sentenceList = ", ".join(triggerList)
-        context.bot.send_message(chat_id, text="Trigger list:\n\n" + sentenceList)
+        textSentenceList = ", ".join(textTriggerList)
+        stickerSentenceList = ", ".join(stickerTriggerList)
+        photoSentenceList = ", ".join(photoTriggerList)
+        context.bot.send_message(chat_id, text="*Text Trigger List:*\n" + textSentenceList + "\n\n*Sticker Trigger List:*\n" + stickerSentenceList + "\n\n*Image Trigger List:*\n" + photoSentenceList, parse_mode='markdown')
     else: 
         error = 'Something went wrong or trigger wasnt found'
         context.bot.send_message(chat_id, text="Hmm, doesn't look like this group has any triggers yet!")
@@ -321,7 +330,7 @@ def list_trigger_detail_command(update: Update, context: CallbackContext) -> Non
     """Sends a message to the requester with the full detail of all triggers"""
     chat_id = str(update.message.chat_id)
     user_id = str(update.message.from_user.id)
-    select = cursor.execute("SELECT * from triggers WHERE chat_id = ?",(chat_id,))
+    select = cursor.execute("SELECT * from triggers WHERE chat_id = ? ORDER BY trigger_word ASC",(chat_id,))
     rows = select.fetchall()
     triggerList = []
     if rows:
