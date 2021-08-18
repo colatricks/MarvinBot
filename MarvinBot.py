@@ -308,6 +308,7 @@ def list_trigger_command(update: Update, context: CallbackContext) -> None:
     textTriggerList = []
     stickerTriggerList = []
     photoTriggerList = []
+    gifTriggerList = []
     if rows:
         for row in rows:
             if row['trigger_response_type'] == "text":
@@ -316,11 +317,14 @@ def list_trigger_command(update: Update, context: CallbackContext) -> None:
                 stickerTriggerList.append(row['trigger_word'])
             elif row['trigger_response_type'] == "photo":
                 photoTriggerList.append(row['trigger_word'])
+            elif row['trigger_response_type'] == "gif":
+                gifTriggerList.append(row['trigger_word'])
         
         textSentenceList = ", ".join(textTriggerList)
         stickerSentenceList = ", ".join(stickerTriggerList)
         photoSentenceList = ", ".join(photoTriggerList)
-        context.bot.send_message(chat_id, text="*Text Trigger List:*\n" + textSentenceList + "\n\n*Sticker Trigger List:*\n" + stickerSentenceList + "\n\n*Image Trigger List:*\n" + photoSentenceList, parse_mode='markdown')
+        gifSentenceList = ", ".join(gifTriggerList)
+        context.bot.send_message(chat_id, text="*Text Trigger List:*\n" + textSentenceList + "\n\n*Sticker Trigger List:*\n" + stickerSentenceList + "\n\n*Image Trigger List:*\n" + photoSentenceList + "\n\n*GIF Trigger List:*\n" + gifSentenceList, parse_mode='markdown')
     else: 
         error = 'Something went wrong or trigger wasnt found'
         context.bot.send_message(chat_id, text="Hmm, doesn't look like this group has any triggers yet!")
