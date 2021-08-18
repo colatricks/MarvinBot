@@ -60,11 +60,6 @@ separator = '->'
 
 # END USER CONFIGURATION 
 
-# Counts for some functionality - this will be replaced with values held in the DB so it's counted per chat soon.
-frequency_count = 0
-standard_character_count = 0
-epic_character_count = 0
-
 # Enable logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -75,6 +70,7 @@ logger = logging.getLogger(__name__)
 # Open connection to the Database and define table names
 dbname = "marvin"
 db = sqlite3.connect(dbname+".db", check_same_thread=False)
+db.row_factory = sqlite3.Row
 cursor = db.cursor()
 
 def db_initialise(chat_id) -> None:
@@ -84,7 +80,7 @@ def db_initialise(chat_id) -> None:
     cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_terms' ('chat_id' INT NOT NULL, 'term_id' TEXT NOT NULL, 'start_date' TEXT NOT NULL, 'end_date' TEXT NOT NULL, 'is_current' INT NOT NULL)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_past_winners' ('chat_id' INT NOT NULL, 'winning_house' TEXT NOT NULL, 'house_points_total' INT NOT NULL, 'house_champion' TEXT NOT NULL, 'champion_points_total' INT NOT NULL)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_config' ('chat_id' INT NOT NULL, 'config_name' TEXT NOT NULL, 'affected_entity' TEXT NOT NULL, 'expiry_time' TEXT NOT NULL)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_counters' ('chat_id' INT NOT NULL, 'counter_name' TEXT NOT NULL, 'counter_value' TEXT NOT NULL)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS 'counters' ('chat_id' INT NOT NULL, 'counter_name' TEXT NOT NULL, 'counter_value' TEXT NOT NULL)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL, 'duration' INT, 'type' TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'config' ('chat_id' INT NOT NULL, 'config_name' TEXT NOT NULL, 'config_group' TEXT NOT NULL, 'config_value' TEXT NOT NULL, 'config_description' TEXT NOT NULL, 'config_type' TEXT NOT NULL)")
 
@@ -447,7 +443,7 @@ def hp_assign_house(update: Update, context: CallbackContext) -> None:
                     context.bot.send_message(chat_id, text="🧝‍♀️ House Elf 🧝‍♀️ \n\nA little unsure of their home,\nThey get to clean up our dirty work.", parse_mode='markdown')  
                 db.commit()
         else:
-            context.bot.send_message(chat_id, text="Did you Avada Kedavra someone?\n\nI didn't find that username in my database. Either they haven't spoken before or you typo'd it.", parse_mode='markdown')    
+            context.bot.send_message(chat_id, text="Did you Avada Kedavra someone?\n\nI didn't find that username in my database. Most likely they haven't set a username in Telegram yet. Either that or they haven't spoken before or you typo'd it.", parse_mode='markdown')    
     elif len(command) == 2:
         select = cursor.execute("SELECT * FROM users WHERE username = ? COLLATE NOCASE AND chat_id = ?",(command[1][1:],chat_id))
         rows = select.fetchone()
@@ -891,7 +887,7 @@ def hp_character_appearance(chat_id,update,context,timestamp,term_id,user=False,
 
     if user == False:
         if standard_or_epic == "Standard":
-            hp_random_character(chat_id,context,update,timestamp,term_id)
+            hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epic)
         elif standard_or_epic == "Epic":
             hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epic)
 
@@ -1157,21 +1153,29 @@ def hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epi
                     messageinfo = context.bot.send_message(chat_id, text="*Harry Potter* almost awarded points to the House Elves as the lowest scoring House! However, in keeping with their manner they sacrificed themselves for the next lowest house - choosing " + user_detail[1].user.mention_markdown() + " of " + receiverHouse + " who has been granted 75 House points!", parse_mode='markdown')
 
 def hp_character_appearance_counter(chat_id,update,context,term_id,timestamp) -> None:
-    global standard_character_count
-    global epic_character_count
-    standard_character_count += 1
-    epic_character_count += 1
+    
+    standard_character_count = int(get_counter(chat_id,"standard_character_counter"))
+    epic_character_count = int(get_counter(chat_id,"epic_character_counter"))
+    print("standard char count: " + str(standard_character_count))
+    print("epic char count: " + str(epic_character_count))
 
     chat_config = get_chat_config(chat_id)
     standard_character_total = int(chat_config['standard_characters_frequency'][1])
     epic_character_total = int(chat_config['epic_characters_frequency'][1])
 
-    if standard_character_count == standard_character_total:
-        hp_character_appearance(chat_id,update,context,timestamp,term_id)
-        standard_character_count = 0
-    elif epic_character_count == epic_character_total:
+    if standard_character_count > standard_character_total:
+        hp_character_appearance(chat_id,update,context,timestamp,term_id,False,"Standard")
+        set_counter(chat_id,"standard_character_counter",1)
+    else:
+        standard_character_count += 1
+        set_counter(chat_id,"standard_character_counter",standard_character_count)
+
+    if epic_character_count > epic_character_total:
         hp_character_appearance(chat_id,update,context,timestamp,term_id,False,"Epic")
-        epic_character_count = 0
+        set_counter(chat_id,"epic_character_counter",1)
+    else: 
+        epic_character_count += 1
+        set_counter(chat_id,"epic_character_counter",epic_character_count)
 
 def hp_rules_checker(chat_id,context,user_id = None) -> None:
     time = datetime.now()
@@ -1333,12 +1337,14 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     if chat_config['marvin_sass_enabled'][1].lower() == "yes":
         global frequency_count
         frequency_total = int(chat_config['marvin_sass_frequency'][1])
-        if frequency_count > frequency_total:
+        marvin_counter = int(get_counter(chat_id,"marvin_sass_counter"))
+        if marvin_counter > frequency_total:
             marvin_says = marvin_personality()
             context.bot.send_message(chat_id, text=marvin_says)
-            frequency_count = 0
+            set_counter(chat_id,"marvin_sass_counter",1)
         else:
-            frequency_count += 1
+            marvin_counter += 1
+            set_counter(chat_id,"marvin_sass_counter",marvin_counter)
     
     if chat_config['reputation_enabled'][1].lower() == "yes":
         term_id = hp_term_tracker(chat_id, context)
@@ -1399,9 +1405,29 @@ def chat_media_polling(update: Update, context: CallbackContext) -> None:
         else:
             pass # replying to a User with images etc, does nothing.
 
-# General Admin Functionality
-#
-#
+# General Marvin Functionality
+
+def get_counter(chat_id, counter_name):
+    select = cursor.execute("SELECT * FROM counters WHERE chat_id = ? AND counter_name = ?",(chat_id,counter_name))
+    rows = select.fetchone()
+    if rows:
+        counter_value = rows['counter_value']
+        return counter_value
+    else:
+       counter_value = 1
+       cursor.execute("INSERT INTO counters (chat_id, counter_name, counter_value) VALUES(?,?,?)",(chat_id,counter_name,counter_value))
+       db.commit()
+       return counter_value
+
+def set_counter(chat_id, counter_name, counter_value):
+    select = cursor.execute("SELECT * FROM counters WHERE chat_id = ? AND counter_name = ?",(chat_id,counter_name))
+    rows = select.fetchone()
+    if rows:
+        cursor.execute("UPDATE counters SET counter_value = ? WHERE chat_id = ? AND counter_name = ?",(counter_value,chat_id,counter_name))
+        db.commit()
+    else:
+       cursor.execute("INSERT INTO counters (chat_id, counter_name, counter_value) VALUES(?,?,?)",(chat_id,counter_name,counter_value))
+       db.commit()
 
 def get_chat_config(chat_id, context = False, command = False, fullDetail = False) -> None:
     select = cursor.execute("SELECT * from config WHERE chat_id = ?",(chat_id,))
@@ -1552,7 +1578,6 @@ def main() -> None:
     # SIGTERM or SIGABRT. This should be used most of the time, since
     # start_polling() is non-blocking and will stop the bot gracefully.
     updater.idle()
-
 
 if __name__ == '__main__':
     main()
