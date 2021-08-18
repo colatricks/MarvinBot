@@ -1156,8 +1156,6 @@ def hp_character_appearance_counter(chat_id,update,context,term_id,timestamp) ->
     
     standard_character_count = int(get_counter(chat_id,"standard_character_counter"))
     epic_character_count = int(get_counter(chat_id,"epic_character_counter"))
-    print("standard char count: " + str(standard_character_count))
-    print("epic char count: " + str(epic_character_count))
 
     chat_config = get_chat_config(chat_id)
     standard_character_total = int(chat_config['standard_characters_frequency'][1])
