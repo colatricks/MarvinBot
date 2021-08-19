@@ -39,7 +39,7 @@ import uuid
 import json
 from datetime import timedelta
 from datetime import datetime
-from telegram import Update, ForceReply, ParseMode
+from telegram import Update, ForceReply, ParseMode, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from decouple import config
 
@@ -82,6 +82,7 @@ def db_initialise(chat_id) -> None:
     cursor.execute("CREATE TABLE IF NOT EXISTS 'hp_config' ('chat_id' INT NOT NULL, 'config_name' TEXT NOT NULL, 'affected_entity' TEXT NOT NULL, 'expiry_time' TEXT NOT NULL)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'counters' ('chat_id' INT NOT NULL, 'counter_name' TEXT NOT NULL, 'counter_value' TEXT NOT NULL)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL, 'duration' INT, 'type' TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_question_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'trigger_word' TEXT, 'new_value' TEXT, 'status' TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'config' ('chat_id' INT NOT NULL, 'config_name' TEXT NOT NULL, 'config_group' TEXT NOT NULL, 'config_value' TEXT NOT NULL, 'config_description' TEXT NOT NULL, 'config_type' TEXT NOT NULL)")
 
     # Create Default Config Values if they don't exist
@@ -201,10 +202,21 @@ def start(update: Update, context: CallbackContext) -> None:
 # Allows users to create automatic responses to specied keywords. Creation is via '/add triggerWord -> triggerResponse'
 # Deletion is via '/del triggerWord', a list of current triggers can be pulled via '/list' or '/listDetail which will PM the user.
 
+def update_trigger_question(update: Update, context: CallbackContext, trigger_word, trigger_value,chat_id,timestamp,new_value) -> int:
+    reply_keyboard = [['Yes', 'No']]
+
+    messageinfo = update.message.reply_text(
+        "Trigger already exists. \n\nCurrent value is: " + trigger_value,
+        reply_markup=ReplyKeyboardMarkup(
+            reply_keyboard, one_time_keyboard=True, selective=True, input_field_placeholder="Do you want to update "+ trigger_word + "?"
+        ),
+    )
+
+    log_bot_message(messageinfo.message_id,chat_id,timestamp,long_duration,"TriggerQuestion","Unanswered",trigger_word,new_value)
+
 def add_trigger_command(update: Update, context: CallbackContext) -> None:
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S"))
-    """Adds a new trigger when the /add command is used"""
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
 
@@ -239,8 +251,16 @@ def add_trigger_command(update: Update, context: CallbackContext) -> None:
         log_bot_message(messageinfo.message_id,chat_id,timestamp,long_duration,type="MediaTrigger")
         return
 
-    # Save trigger for the group
-    save_trigger(chat_id,trigger_word,trigger_response,timestamp,context)
+    # Does the trigger already exist? If yes, kick user out to a question otherwise go ahead and save the trigger
+    # User reply is handled in chat_polling() and trigger saved directly there
+    lookup = trigger_lookup(trigger_word,chat_id)
+    if(lookup[0] == 1):
+        question = update_trigger_question(update,context,trigger_word,lookup[1],chat_id,timestamp,trigger_response)
+    elif(lookup[0] in [2,3,4]):
+        messageinfo = update.message.reply_text("That trigger already exists and it's a " + lookup[2] + ". You'll need to delete it first with '/del " + trigger_word + "'")
+    else:  
+        # Save trigger for the group
+        save_trigger(chat_id,trigger_word,trigger_response,timestamp,context)
 
 def save_trigger(chat_id,trigger_word,trigger_response,timestamp,context,trigger_response_type = 'text',trigger_response_media_id = 'None') -> None:
     # Save trigger for the group
@@ -285,15 +305,15 @@ def trigger_lookup(trigger_word, chat_id) -> None:
     
     if rows:
         for row in rows:
-            if str(row[0]) == trigger_word and str(row[2]) == chat_id:
-                if row[3] == "text":
-                    return 1,row[1]
-                elif row[3] == "gif":
-                    return 2,row[4]
-                elif row[3] == "photo":
-                    return 3,row[4]  
-                elif row[3] == "sticker":
-                    return 4,row[4]               
+            if str(row['trigger_word']) == trigger_word and str(row['chat_id']) == chat_id:
+                if row['trigger_response_type'] == "text":
+                    return 1,row['trigger_response'],row['trigger_response_type']
+                elif row['trigger_response_type'] == "gif":
+                    return 2,row['trigger_response_media_id'],row['trigger_response_type']
+                elif row['trigger_response_type'] == "photo":
+                    return 3,row['trigger_response_media_id'],row['trigger_response_type']  
+                elif row['trigger_response_type'] == "sticker":
+                    return 4,row['trigger_response_media_id'],row['trigger_response_type']               
             else: 
                 return 0
     else: 
@@ -319,7 +339,6 @@ def list_trigger_command(update: Update, context: CallbackContext) -> None:
                 photoTriggerList.append(row['trigger_word'])
             elif row['trigger_response_type'] == "gif":
                 gifTriggerList.append(row['trigger_word'])
-        
         textSentenceList = ", ".join(textTriggerList)
         stickerSentenceList = ", ".join(stickerTriggerList)
         photoSentenceList = ", ".join(photoTriggerList)
@@ -1218,10 +1237,16 @@ def hp_rules_checker(chat_id,context,user_id = None) -> None:
     
     return outcome,timestampObject
 
-def log_bot_message(message_id, chat_id, timestamp, duration = standard_duration, type = "Standard", status = "sent") -> None:
+def log_bot_message(message_id, chat_id, timestamp, duration = standard_duration, type = "Standard", status = "sent", trigger_word = "", new_value = "") -> None:
+
+    # Used for keeping track of questions
+    # This will need improving if we end up needing to ask more question types!
+    if type == "TriggerQuestion":
+        cursor.execute("INSERT INTO bot_question_messages (chat_id,message_id,trigger_word,new_value,status) VALUES(?,?,?,?,?)",(chat_id,message_id,trigger_word,new_value,status))
+        db.commit()
 
     # Used for keeping track of the most recent message_id from users
-    if type == "MostRecent":
+    elif type == "MostRecent":
         select = cursor.execute("SELECT * FROM bot_service_messages WHERE chat_id = ? AND type = ?",(chat_id,type))
         rows = select.fetchone()
         if rows:
@@ -1233,6 +1258,14 @@ def log_bot_message(message_id, chat_id, timestamp, duration = standard_duration
     else:
         cursor.execute("INSERT INTO bot_service_messages (message_id, chat_id, created_date, status, duration, type) VALUES(?,?,?,?,?,?)",(message_id, chat_id, timestamp, status, duration, type))
         db.commit()
+
+def log_question_lookup(message_id,chat_id):
+    # Looks up a message in the bot log to see if it exists
+    # This will need improving if we end up needing to ask more question types!
+    select = cursor.execute("SELECT * FROM bot_question_messages WHERE chat_id = ? AND message_id = ?",(chat_id,message_id))
+    rows = select.fetchone()
+    if rows:
+        return rows
 
 def del_bot_message(chat_id, context):
     time = datetime.now()
@@ -1357,9 +1390,10 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
             marvin_counter += 1
             set_counter(chat_id,"marvin_sass_counter",marvin_counter)
     
+    # Reputation System
     if chat_config['reputation_enabled'][1].lower() == "yes":
         term_id = hp_term_tracker(chat_id, context)
-    # Check if message is a a reply
+        # Check if message is a a reply
         if update.message.reply_to_message:
             if not update.message.reply_to_message.from_user.is_bot:
                 # Reply to a user, award points if appropriate
@@ -1367,9 +1401,31 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
             else:
                 # Replying to Marvin, do stuff if needed
                 hp_character_appearance(chat_id,update,context,timestamp,term_id,user=True)
-                pass
 
-        hp_character_appearance_counter(chat_id,update,context,term_id,timestamp)            
+        hp_character_appearance_counter(chat_id,update,context,term_id,timestamp)  
+
+    # Check if user is replying to a bot question
+    if update.message.reply_to_message:
+        reply_message_id = update.message.reply_to_message.message_id
+        # Check if we're replying to a bot question
+        # This will need improving if we end up needing to ask more question types!
+        lookup = log_question_lookup(reply_message_id,chat_id)
+        if lookup:
+            # Update trigger reply?
+            if update.message.text.lower() == "yes":
+                save_trigger(chat_id,lookup['trigger_word'],lookup['new_value'],timestamp,context)
+                context.bot.delete_message(chat_id,reply_message_id)
+                context.bot.delete_message(chat_id,message_id)
+                cursor.execute("DELETE FROM bot_question_messages WHERE chat_id = ? AND message_id = ?",(chat_id,reply_message_id))
+                db.commit()
+            elif update.message.text.lower() == "no":
+                context.bot.delete_message(chat_id,reply_message_id)
+                context.bot.delete_message(chat_id,message_id)
+                cursor.execute("DELETE FROM bot_question_messages WHERE chat_id = ? AND message_id = ?",(chat_id,reply_message_id))
+                messageinfo = context.bot.send_message(chat_id, text="User decided not to update " + lookup['trigger_word'])
+                db.commit()
+
+
     del_bot_message(chat_id, context)
 
 def marvin_personality() -> None:
