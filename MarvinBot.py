@@ -220,6 +220,13 @@ def add_trigger_command(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
     chat_text = update.message.text
 
+    if(chat_text.startswith("/add ")):
+        pass
+    else:
+        chat_text = "/add " + chat_text
+    
+    print("Chat text is: " + str(chat_text))
+
     # Validations.
     if(len(chat_text.split()) < 2):
         messageinfo = update.message.reply_text("Bad Arguments, create a trigger with: \n\n/add trigger " + separator + " trigger_response")
@@ -728,6 +735,8 @@ def hp_points_admin(update: Update, context: CallbackContext) -> None:
         else:
             messageinfo = context.bot.send_message(chat_id, text="Admin Only: \n/points @username <pointsTotal>\n\nAll Users:\n/points totals")
             log_bot_message(messageinfo.message_id,chat_id,timestamp)
+    elif len(update.message.text.split()) == 1:
+        hp_totals(chat_id, term_id, term_end, timestamp, context)
     else: 
         messageinfo = context.bot.send_message(chat_id, text="Admin Only: \n/points @username <pointsTotal>\n\nAll Users:\n/points totals")
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
@@ -1350,6 +1359,10 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     username = context.bot.get_chat_member(chat_id,user_id).user.username
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S")) 
+
+    # Kik style trigger adding
+    if(chat_text.find(separator, 1)):
+        add_trigger_command(update,context)
 
     # Console Logging
     print(f"\033[1mTime:\033[0m {timestamp} \033[1mGroup Name:\033[0m {update.message.chat.title} \033[1mGroup ID: \033[0m{update.message.chat.id} \033[1m User:\033[0m {username} \n{chat_text} ")
