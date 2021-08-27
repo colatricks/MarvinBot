@@ -224,8 +224,6 @@ def add_trigger_command(update: Update, context: CallbackContext) -> None:
         pass
     else:
         chat_text = "/add " + chat_text
-    
-    print("Chat text is: " + str(chat_text))
 
     # Validations.
     if(len(chat_text.split()) < 2):
