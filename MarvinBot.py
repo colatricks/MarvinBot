@@ -1361,7 +1361,7 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S")) 
 
     # Kik style trigger adding
-    if(chat_text.find(separator, 1)):
+    if(separator in chat_text):
         add_trigger_command(update,context)
 
     # Console Logging
