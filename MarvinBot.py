@@ -1360,15 +1360,15 @@ def chat_polling(update: Update, context: CallbackContext) -> None:
     time = datetime.now()
     timestamp = str(time.strftime("%Y-%m-%d %H:%M:%S")) 
 
-    # Kik style trigger adding
-    if(separator in chat_text):
-        add_trigger_command(update,context)
-
     # Console Logging
     print(f"\033[1mTime:\033[0m {timestamp} \033[1mGroup Name:\033[0m {update.message.chat.title} \033[1mGroup ID: \033[0m{update.message.chat.id} \033[1m User:\033[0m {username} \n{chat_text} ")
     # Log Most Recent message ID for each chat
     # The user_id on the end here is a bit of a cludge, status isn't really supposed to hold user ID's but it works for the HP Character Appearance stuff will likely refactor at some point
     log_bot_message(message_id,chat_id,timestamp,3600,"MostRecent",user_id)
+
+    # Kik style trigger adding
+    if(separator in chat_text):
+        add_trigger_command(update,context)
 
     # Lookup to check if text is a trigger - send trigger message to group.
     lookup = trigger_lookup(chat_text.lower(), chat_id)
