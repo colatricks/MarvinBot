@@ -1611,6 +1611,9 @@ def greet_chat_members(update: Update, context: CallbackContext) -> None:
     cause_name = update.chat_member.from_user.mention_html()
     member_name = update.chat_member.new_chat_member.user.mention_html()
 
+    if cause_name == member_name:
+        cause_name = "invite link"
+
     if not was_member and is_member:
         time.sleep(3)
         update.effective_chat.send_message(
