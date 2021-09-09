@@ -37,10 +37,12 @@ import random
 import re
 import uuid
 import json
+import time
 from datetime import timedelta
 from datetime import datetime
-from telegram import Update, ForceReply, ParseMode, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram import Update, ForceReply, ParseMode, ReplyKeyboardMarkup, ReplyKeyboardRemove, ChatMemberUpdated, ChatMember, Chat
+from typing import Tuple, Optional
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ChatMemberHandler
 from decouple import config
 
 # USER CONFIGURATION
@@ -84,6 +86,7 @@ def db_initialise(chat_id) -> None:
     cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_service_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'created_date' TEXT NOT NULL, 'status' TEXT NOT NULL, 'duration' INT, 'type' TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'bot_question_messages' ('chat_id' INT NOT NULL, 'message_id' TEXT NOT NULL, 'trigger_word' TEXT, 'new_value' TEXT, 'status' TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS 'config' ('chat_id' INT NOT NULL, 'config_name' TEXT NOT NULL, 'config_group' TEXT NOT NULL, 'config_value' TEXT NOT NULL, 'config_description' TEXT NOT NULL, 'config_type' TEXT NOT NULL)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS 'welcome_message' ('welcome_message' TEXT NOT NULL, 'chat_id' INTEGER NOT NULL)")
 
     # Create Default Config Values if they don't exist
     cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"roll_enabled","Roll","yes","Toggles the /roll function - options are Yes/No","boolean",chat_id,"roll_enabled"))
@@ -94,6 +97,8 @@ def db_initialise(chat_id) -> None:
     cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"standard_characters_frequency","Harry Potter","500","How many messages between Standard characters appearance","int",chat_id,"standard_characters_frequency"))
     cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"epic_characters_enabled","Harry Potter","yes","Toggles Epic HP Characters appearances. reputation_enabled must be Yes.","boolean",chat_id,"epic_characters_enabled"))
     cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"epic_characters_frequency","Harry Potter","1200","How many messages between Epic characters appearance","int",chat_id,"epic_characters_frequency"))
+    cursor.execute("INSERT INTO welcome_message(welcome_message,chat_id) SELECT ?, ? WHERE NOT EXISTS(SELECT 1 FROM welcome_message WHERE chat_id = ?);",("",chat_id,chat_id))
+    
 
 # HELPERS
 # Make timestamps pretty again
@@ -1484,6 +1489,137 @@ def chat_media_polling(update: Update, context: CallbackContext) -> None:
             pass # replying to a User with images etc, does nothing.
 
 # General Marvin Functionality
+def set_welcome(update: Update, context: CallbackContext) -> None:
+    if update.message.chat_id:      
+        chat_id = str(update.message.chat_id)
+    elif update.message.chat.id:
+        chat_id = str(update.message.chat.id)
+    chat_text = update.message.text
+    user_id = update.message.from_user.id
+    user_status = (context.bot.get_chat_member(chat_id,user_id)).status
+    
+    if len(update.message.text.split()) > 1:
+        if user_status in ("creator","administrator"):
+            welcome_message = chat_text.split(' ', 1)[1]
+            cursor.execute("UPDATE welcome_message SET welcome_message = ? WHERE chat_id = ?",(welcome_message,chat_id))
+            messageinfo = context.bot.send_message(chat_id, text="Welcome message updated.", parse_mode='markdown')
+            db.commit()
+        else:
+            messageinfo = context.bot.send_message(chat_id, text="You don't seem to be an admin.", parse_mode='markdown')
+            log_bot_message()
+    elif len(update.message.text.split()) == 1:
+        welcome_message = get_welcome(update, context, chat_id)
+        messageinfo = context.bot.send_message(chat_id, text=welcome_message, parse_mode='markdown')
+
+def get_welcome(update: Update, context: CallbackContext, chat_id) -> None:
+    select = cursor.execute("SELECT * FROM welcome_message WHERE chat_id = ?",(chat_id,))
+    rows = select.fetchone()
+    if rows:
+        welcome_message = rows['welcome_message']
+        return welcome_message
+
+def track_chats(update: Update, context: CallbackContext) -> None:
+    """Tracks the chats the bot is in."""
+    result = extract_status_change(update.my_chat_member)
+    if result is None:
+        return
+    was_member, is_member = result
+
+    # Let's check who is responsible for the change
+    cause_name = update.effective_user.full_name
+
+    # Handle chat types differently:
+    chat = update.effective_chat
+    if chat.type == Chat.PRIVATE:
+        if not was_member and is_member:
+            logger.info("%s started the bot", cause_name)
+            context.bot_data.setdefault("user_ids", set()).add(chat.id)
+        elif was_member and not is_member:
+            logger.info("%s blocked the bot", cause_name)
+            context.bot_data.setdefault("user_ids", set()).discard(chat.id)
+    elif chat.type in [Chat.GROUP, Chat.SUPERGROUP]:
+        if not was_member and is_member:
+            logger.info("%s added the bot to the group %s", cause_name, chat.title)
+            context.bot_data.setdefault("group_ids", set()).add(chat.id)
+        elif was_member and not is_member:
+            logger.info("%s removed the bot from the group %s", cause_name, chat.title)
+            context.bot_data.setdefault("group_ids", set()).discard(chat.id)
+    else:
+        if not was_member and is_member:
+            logger.info("%s added the bot to the channel %s", cause_name, chat.title)
+            context.bot_data.setdefault("channel_ids", set()).add(chat.id)
+        elif was_member and not is_member:
+            logger.info("%s removed the bot from the channel %s", cause_name, chat.title)
+            context.bot_data.setdefault("channel_ids", set()).discard(chat.id)
+
+def show_chats(update: Update, context: CallbackContext) -> None:
+    """Shows which chats the bot is in"""
+    user_ids = ", ".join(str(uid) for uid in context.bot_data.setdefault("user_ids", set()))
+    group_ids = ", ".join(str(gid) for gid in context.bot_data.setdefault("group_ids", set()))
+    channel_ids = ", ".join(str(cid) for cid in context.bot_data.setdefault("channel_ids", set()))
+    text = (
+        f"@{context.bot.username} is currently in a conversation with the user IDs {user_ids}."
+        f" Moreover it is a member of the groups with IDs {group_ids} "
+        f"and administrator in the channels with IDs {channel_ids}."
+    )
+    update.effective_message.reply_text(text)
+
+def extract_status_change(
+    chat_member_update: ChatMemberUpdated,
+) -> Optional[Tuple[bool, bool]]:
+    """Takes a ChatMemberUpdated instance and extracts whether the 'old_chat_member' was a member
+    of the chat and whether the 'new_chat_member' is a member of the chat. Returns None, if
+    the status didn't change.
+    """
+    status_change = chat_member_update.difference().get("status")
+    old_is_member, new_is_member = chat_member_update.difference().get("is_member", (None, None))
+
+    if status_change is None:
+        return None
+
+    old_status, new_status = status_change
+    was_member = (
+        old_status
+        in [
+            ChatMember.MEMBER,
+            ChatMember.CREATOR,
+            ChatMember.ADMINISTRATOR,
+        ]
+        or (old_status == ChatMember.RESTRICTED and old_is_member is True)
+    )
+    is_member = (
+        new_status
+        in [
+            ChatMember.MEMBER,
+            ChatMember.CREATOR,
+            ChatMember.ADMINISTRATOR,
+        ]
+        or (new_status == ChatMember.RESTRICTED and new_is_member is True)
+    )
+
+    return was_member, is_member
+
+def greet_chat_members(update: Update, context: CallbackContext) -> None:
+    """Greets new users in chats and announces when someone leaves"""
+    chat_id = update.effective_chat.id
+    welcome_message = get_welcome(update, context, chat_id)
+    result = extract_status_change(update.chat_member)
+    if result is None:
+        return
+
+    was_member, is_member = result
+    cause_name = update.chat_member.from_user.mention_html()
+    member_name = update.chat_member.new_chat_member.user.mention_html()
+
+    if not was_member and is_member:
+        time.sleep(3)
+        update.effective_chat.send_message(
+            f"{member_name} was added by {cause_name}.",
+            parse_mode=ParseMode.HTML,
+        )
+        messageinfo = context.bot.send_message(chat_id, text=welcome_message, parse_mode='markdown')
+    elif was_member and not is_member:
+        pass
 
 def get_counter(chat_id, counter_name):
     select = cursor.execute("SELECT * FROM counters WHERE chat_id = ? AND counter_name = ?",(chat_id,counter_name))
@@ -1644,13 +1780,21 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("tags", hp_tags))
     dispatcher.add_handler(CommandHandler("config", config_command))
     dispatcher.add_handler(CommandHandler("broadcast", broadcast_command))
+    dispatcher.add_handler(CommandHandler("welcome", set_welcome))
+
+    # Keep track of which chats the bot is in
+    dispatcher.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
+    dispatcher.add_handler(CommandHandler("show_chats", show_chats))
+
+    # Watch for new people
+    dispatcher.add_handler(ChatMemberHandler(greet_chat_members, ChatMemberHandler.CHAT_MEMBER))
 
     # on non command i.e message - checks each message and runs it through our poller
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command & ~Filters.update.edited_message, chat_polling))
     dispatcher.add_handler(MessageHandler(~Filters.text & ~Filters.command, chat_media_polling))
 
     # Start the Bot
-    updater.start_polling()
+    updater.start_polling(allowed_updates=Update.ALL_TYPES)
 
     # Run the bot until you press Ctrl-C or the process receives SIGINT,
     # SIGTERM or SIGABRT. This should be used most of the time, since
