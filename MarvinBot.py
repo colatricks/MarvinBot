@@ -615,6 +615,7 @@ def hp_points(update,context,chat_id,timestamp) -> None:
     term_id = rows[1]
     positive = ["+","❤️","😍","👍"]
     negative = ["-","😡","👎"]
+    message_id = update.message.message_id
     
     to_user_id = update.message.reply_to_message.from_user.id
     from_user_id = update.message.from_user.id
@@ -627,14 +628,20 @@ def hp_points(update,context,chat_id,timestamp) -> None:
     outcome = hp_rules_checker(chat_id,context,to_user_id)
 
     # Check if message was positive or not
-    if update.message.text in positive:
+    if update.message.text[0] in positive:
         if outcome[0] == "bellatrix_block":
             messageinfo = context.bot.send_message(chat_id, text="*The house of " + receiverHouse + " is cursed by Bellatrix*!\n\n" + receiverHouse + " can't receive points. The curse ends in around " + pretty_date(outcome[1]), parse_mode='markdown')
             log_bot_message(messageinfo.message_id,chat_id,outcome[1], short_duration)
+            if (len(update.message.text) == 1):
+                context.bot.delete_message(chat_id,message_id)
         else: 
             hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"positive",1,"from_user",update,context,senderHouse,receiverHouse)
-    elif update.message.text in negative:
+            if (len(update.message.text) == 1):
+                context.bot.delete_message(chat_id,message_id)
+    elif update.message.text[0] in negative:
         hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"negative",-1,"from_user",update,context,senderHouse,receiverHouse)
+        if (len(update.message.text) == 1):
+            context.bot.delete_message(chat_id,message_id)
 
 def hp_allocate_points(chat_id,timestamp,to_user_id,term_id,positive_negative,points_allocated,from_who,update,context,senderHouse=None,receiverHouse=None) -> None:
 
