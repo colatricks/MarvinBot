@@ -433,7 +433,6 @@ def activity_status_check(user_id,chat_id,context: CallbackContext) -> None:
         user_status = (user_detail).status
 
         if user_status in ("member","creator","administrator"):
-            print("Get here?")
             return user_status,user_detail
         else:
             cursor.execute("UPDATE users SET status = 'left' WHERE user_id = ? AND chat_id = ?",(user_id,chat_id))
