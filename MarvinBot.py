@@ -433,13 +433,16 @@ def activity_status_check(user_id,chat_id,context: CallbackContext) -> None:
         user_status = (user_detail).status
 
         if user_status in ("member","creator","administrator"):
+            print("Get here?")
             return user_status,user_detail
         else:
             cursor.execute("UPDATE users SET status = 'left' WHERE user_id = ? AND chat_id = ?",(user_id,chat_id))
             db.commit()
             return 0,user_detail
-    except: 
-        user_detail = 'User not found.'
+    except Exception as ex: 
+        cursor.execute("UPDATE users SET status = 'left' WHERE user_id = ? AND chat_id = ?",(user_id,chat_id))
+        db.commit()
+        user_detail = 'User not found..'
         return 0, user_detail
 
 def activity_lookup(user_id, chat_id) -> None:
@@ -635,13 +638,17 @@ def hp_points(update,context,chat_id,timestamp) -> None:
             if (len(update.message.text) == 1):
                 context.bot.delete_message(chat_id,message_id)
         else: 
-            hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"positive",1,"from_user",update,context,senderHouse,receiverHouse)
             if (len(update.message.text) == 1):
+                hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"positive",1,"from_user",update,context,senderHouse,receiverHouse)
                 context.bot.delete_message(chat_id,message_id)
+            else:
+                hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"positive",2,"from_user",update,context,senderHouse,receiverHouse)
     elif update.message.text[0] in negative:
-        hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"negative",-1,"from_user",update,context,senderHouse,receiverHouse)
         if (len(update.message.text) == 1):
+            hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"negative",-1,"from_user",update,context,senderHouse,receiverHouse)
             context.bot.delete_message(chat_id,message_id)
+        else: 
+            hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"negative",-2,"from_user",update,context,senderHouse,receiverHouse)
 
 def hp_allocate_points(chat_id,timestamp,to_user_id,term_id,positive_negative,points_allocated,from_who,update,context,senderHouse=None,receiverHouse=None) -> None:
 
@@ -665,13 +672,13 @@ def hp_allocate_points(chat_id,timestamp,to_user_id,term_id,positive_negative,po
         db.commit()
     
     if from_who == "from_user" and positive_negative == "positive":
-        if points_allocated > 1:
+        if points_allocated > 1 and outcome[0] == "dumbledore_boost":
             messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " " + str(points_allocated) + " House points due to the *Engorgio* spell cast by *Dumbledore*!\n\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown')
         else:
-            messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown')
+            messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has awarded " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " " + str(points_allocated) + " House points!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown')
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
     elif from_who == "from_user" and positive_negative == "negative":
-        messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has deducted " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown' )
+        messageinfo = context.bot.send_message(chat_id, text=update.message.from_user.mention_markdown() + " of " + senderHouse + " has deducted " + update.message.reply_to_message.from_user.mention_markdown() + " of " + receiverHouse + " " + str(points_allocated) + " House points! a House point!\nTheir new total for this Term is: " + str(current_points), parse_mode='markdown' )
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
     
     return current_points
