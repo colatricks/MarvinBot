@@ -610,6 +610,23 @@ def hp_get_user_house(chat_id,user_id) -> None:
     
     return house
 
+def hp_get_last_terms_winner(chat_id) -> None:
+    select = cursor.execute("SELECT * FROM hp_past_winners WHERE chat_id = ?",(chat_id,))
+    rows = select.fetchone()
+    if rows:
+        if rows[1] == "🦁 Gryffindor! 🦁":
+            last_term_winner = "🦁"
+        elif rows[1] == "🐍 Slytherin! 🐍":
+            last_term_winner = "🐍"
+        elif rows[1] == "🦡 Hufflepuff! 🦡":
+            last_term_winner = "🦡"
+        elif rows[1] == "🦅 Ravenclaw! 🦅":
+            last_term_winner = "🦅"
+        elif rows[1] == "🧝‍♀️ House Elves! 🧝‍♀️":
+            last_term_winner = "🧝‍♀️"
+
+    return last_term_winner    
+
 def hp_points(update,context,chat_id,timestamp) -> None:
     # Get Current Term
     select = cursor.execute("SELECT * FROM hp_terms WHERE is_current = 1 AND chat_id = ?",(chat_id,))
@@ -622,9 +639,20 @@ def hp_points(update,context,chat_id,timestamp) -> None:
     to_user_id = update.message.reply_to_message.from_user.id
     from_user_id = update.message.from_user.id
 
+    # Get last terms winner
+    last_term_winner = hp_get_last_terms_winner(chat_id)
+
     # Get Sender & Target Users House
     senderHouse = hp_get_user_house(chat_id,from_user_id)
     receiverHouse = hp_get_user_house(chat_id,to_user_id)
+
+    # Penalise / slow down last terms winner
+    if receiverHouse == last_term_winner:
+        single_point_increase = 0.5
+        double_point_increase = 1
+    else: 
+        single_point_increase = 1
+        double_point_increase = 2
 
     # Rules Check
     outcome = hp_rules_checker(chat_id,context,to_user_id)
@@ -638,10 +666,10 @@ def hp_points(update,context,chat_id,timestamp) -> None:
                 context.bot.delete_message(chat_id,message_id)
         else: 
             if (len(update.message.text) == 1):
-                hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"positive",1,"from_user",update,context,senderHouse,receiverHouse)
+                hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"positive",single_point_increase,"from_user",update,context,senderHouse,receiverHouse)
                 context.bot.delete_message(chat_id,message_id)
             else:
-                hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"positive",2,"from_user",update,context,senderHouse,receiverHouse)
+                hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"positive",double_point_increase,"from_user",update,context,senderHouse,receiverHouse)
     elif update.message.text[0] in negative:
         if (len(update.message.text) == 1):
             hp_allocate_points(chat_id,timestamp,to_user_id,term_id,"negative",-1,"from_user",update,context,senderHouse,receiverHouse)
