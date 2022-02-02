@@ -648,8 +648,8 @@ def hp_points(update,context,chat_id,timestamp) -> None:
 
     # Penalise / slow down last terms winner
     if receiverHouse == last_term_winner:
-        single_point_increase = 0.5
-        double_point_increase = 1
+        single_point_increase = 0.25
+        double_point_increase = 0.5
     else: 
         single_point_increase = 1
         double_point_increase = 2
