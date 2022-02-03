@@ -1664,7 +1664,7 @@ def greet_chat_members(update: Update, context: CallbackContext) -> None:
         messageinfo = context.bot.send_message(chat_id, text=welcome_message, parse_mode='markdown')
     elif was_member and not is_member:
         update.effective_chat.send_message(
-            f"{member_name} is no longer with us.",
+            f"💀 the loser {member_name} is no longer in the group. 💀",
             parse_mode=ParseMode.HTML,
         )
 
