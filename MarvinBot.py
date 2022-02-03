@@ -1652,7 +1652,6 @@ def greet_chat_members(update: Update, context: CallbackContext) -> None:
     cause_name = update.chat_member.from_user.mention_html()
     member_name = update.chat_member.new_chat_member.user.mention_html()
 
-
     if cause_name == member_name:
         cause_name = "invite link"
 
@@ -1664,7 +1663,10 @@ def greet_chat_members(update: Update, context: CallbackContext) -> None:
         )
         messageinfo = context.bot.send_message(chat_id, text=welcome_message, parse_mode='markdown')
     elif was_member and not is_member:
-        pass
+        update.effective_chat.send_message(
+            f"{member_name} is no longer with us.",
+            parse_mode=ParseMode.HTML,
+        )
 
 def get_counter(chat_id, counter_name):
     select = cursor.execute("SELECT * FROM counters WHERE chat_id = ? AND counter_name = ?",(chat_id,counter_name))
