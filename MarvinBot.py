@@ -373,12 +373,18 @@ def list_trigger_detail_command(update: Update, context: CallbackContext) -> Non
         
         sentenceList = "\n\n".join(triggerList)
 
+        print(len(sentenceList))
         if len(sentenceList) > 4000:
-            context.bot.send_message(user_id, text="curses message is too long, fix it cola", parse_mode='markdown')
-            pass
-            
+            split_sentenceList = []
+            n  = 4001
+            for index in range(0, len(sentenceList), n):
+                split_sentenceList.append(sentenceList[index : index + n])
+
+            for chunk in split_sentenceList:
+                context.bot.send_message(user_id, text=chunk, parse_mode='markdown')
         else:
             context.bot.send_message(user_id, text="Full Detail Trigger List:\n\n" + sentenceList, parse_mode='markdown')
+
     else: 
         error = 'Something went wrong or trigger wasnt found'
         context.bot.send_message(chat_id, text="Hmm, doesn't look like this group has any triggers yet!")
