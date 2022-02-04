@@ -367,23 +367,23 @@ def list_trigger_detail_command(update: Update, context: CallbackContext) -> Non
     rows = select.fetchall()
     triggerList = []
     if rows:
+        i = 0 
         for row in rows:
             triggerFull = "*" + row[0] + " : *\n" + row[1]
             triggerList.append(triggerFull)
-        
-        sentenceList = "\n\n".join(triggerList)
-
-        print(len(sentenceList))
-        if len(sentenceList) > 4000:
-            split_sentenceList = []
-            n  = 4001
-            for index in range(0, len(sentenceList), n):
-                split_sentenceList.append(sentenceList[index : index + n])
-
-            for chunk in split_sentenceList:
-                context.bot.send_message(user_id, text=chunk, parse_mode='markdown')
-        else:
-            context.bot.send_message(user_id, text="Full Detail Trigger List:\n\n" + sentenceList, parse_mode='markdown')
+            i += 1
+            print(i)
+            # Telegram has a character limit of 4096 per message - this loop break should send a few messages when group trigger lists get chonky
+            if i == 20:
+                sentenceList = "\n\n".join(triggerList)
+                context.bot.send_message(user_id, text=sentenceList, parse_mode='markdown')
+                triggerList = []
+                i = 0
+                
+        # This just sends the trigger list if it's super short.
+        if i < 20:
+            sentenceList = "\n\n".join(triggerList)
+            context.bot.send_message(user_id, text=sentenceList, parse_mode='markdown')
 
     else: 
         error = 'Something went wrong or trigger wasnt found'
