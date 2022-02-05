@@ -1144,13 +1144,13 @@ def hp_random_character(chat_id,context,update,timestamp,term_id,character_type)
             for row in rows:
                 user_id = row[0]
                 user_detail = activity_status_check(user_id,chat_id,context)
-                current_points = hp_allocate_points(chat_id,timestamp,user_id,term_id,"positive",5,"from_admin",update,context,None,receiverHouse)
+                current_points = hp_allocate_points(chat_id,timestamp,user_id,term_id,"positive",20,"from_admin",update,context,None,receiverHouse)
                 receiverHouse = hp_get_user_house(chat_id,user_id)
                 sentence = user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " (New Total: " + str(current_points) + ")"
                 userList.append(sentence)
             sentenceList = "\n".join(userList)
             context.bot.send_sticker(chat_id, sticker=buckbeak_file_id)
-            messageinfo = context.bot.send_message(chat_id, text="*Buckbeak has landed nearby!*\n\nApproaching carefully, the following are granted 5 points:\n\n" + sentenceList, parse_mode='markdown')
+            messageinfo = context.bot.send_message(chat_id, text="*Buckbeak has landed nearby!*\n\nApproaching carefully, the following are granted 20 points:\n\n" + sentenceList, parse_mode='markdown')
     elif character_type == "Epic":
         if random_epic_char == 1:
             # Bellatrix
