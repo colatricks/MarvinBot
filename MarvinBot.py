@@ -97,6 +97,8 @@ def db_initialise(chat_id) -> None:
     cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"standard_characters_frequency","Harry Potter","500","How many messages between Standard characters appearance","int",chat_id,"standard_characters_frequency"))
     cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"epic_characters_enabled","Harry Potter","yes","Toggles Epic HP Characters appearances. reputation_enabled must be Yes.","boolean",chat_id,"epic_characters_enabled"))
     cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"epic_characters_frequency","Harry Potter","1200","How many messages between Epic characters appearance","int",chat_id,"epic_characters_frequency"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"guest_characters_enabled","Harry Potter","yes","Toggles Guest HP Characters appearances. reputation_enabled must be Yes.","boolean",chat_id,"guest_characters_enabled"))
+    cursor.execute("INSERT INTO config(chat_id,config_name,config_group,config_value,config_description,config_type) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM config WHERE chat_id = ? AND config_name = ?);",(chat_id,"guest_characters_frequency","Harry Potter","1200","How many messages between Guest characters appearance","int",chat_id,"guest_characters_frequency"))
     cursor.execute("INSERT INTO welcome_message(welcome_message,chat_id) SELECT ?, ? WHERE NOT EXISTS(SELECT 1 FROM welcome_message WHERE chat_id = ?);",("",chat_id,chat_id))
     
 
@@ -473,6 +475,7 @@ def activity_lookup(user_id, chat_id) -> None:
 # Points are tracked on a 'term' basis where a term length is defined in your .env file. End of term notices and points reset are automatic.
 # Character Appearances - two tiers, Standard and Epic, Standard Characters allocate/remove up to 10 points with the exception of the Golden Snitch which awards 20.
 # Character Appearances - Epic Characters are more devastating and also rarer, their impacts can completely wipe house points, swap them etc. 
+# Character Appearances - Guest Characters are generally high powered, their impacts can completely wipe house points, swap them etc. 
 
 def hp_assign_house(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.message.chat_id)
@@ -980,13 +983,15 @@ def hp_tags(update: Update, context: CallbackContext) -> None:
         messageinfo = context.bot.send_message(chat_id, text="Yer not a Wizard Harry ... or ... an Admin ... " + user_detail[1].user.mention_markdown(), parse_mode='markdown')
         log_bot_message(messageinfo.message_id,chat_id,timestamp)
 
-def hp_character_appearance(chat_id,update,context,timestamp,term_id,user=False,standard_or_epic = "Standard") -> None:
+def hp_character_appearance(chat_id,update,context,timestamp,term_id,user=False,character_type = "Standard") -> None:
 
     if user == False:
-        if standard_or_epic == "Standard":
-            hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epic)
-        elif standard_or_epic == "Epic":
-            hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epic)
+        if character_type == "Standard":
+            hp_random_character(chat_id,context,update,timestamp,term_id,character_type)
+        elif character_type == "Epic":
+            hp_random_character(chat_id,context,update,timestamp,term_id,character_type)
+        elif character_type == "Guest":
+            hp_random_character(chat_id,context,update,timestamp,term_id,character_type)
 
     elif user == True:
         # Used to handle user responses to game prompts
@@ -1018,12 +1023,15 @@ def hp_character_appearance(chat_id,update,context,timestamp,term_id,user=False,
                 # Message no longer exists, do nothing (or maybe let the user know? Not sure yet.)
                 pass
 
-def hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epic) -> None:
+def hp_random_character(chat_id,context,update,timestamp,term_id,character_type) -> None:
     total_standard_characters = 7
     random_standard_char = random.randint(1, total_standard_characters)
     
     total_epic_characters = 4
     random_epic_char = random.randint(1, total_epic_characters)
+
+    total_guest_characters = 1
+    random_guest_char = random.randint(1, total_guest_characters)
 
     # Get the sticker set(s) to pull associated file_id's
 
@@ -1061,6 +1069,12 @@ def hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epi
         if sticker.emoji == "😂":
             voldemort_file_id = sticker.file_id
 
+    # Deadpool 
+    sticker_set = context.bot.get_sticker_set("TheBestDeadpool")
+    for sticker in sticker_set.stickers:
+        if sticker.emoji == "🎨":
+            deadpool_file_id = sticker.file_id
+
     # Get Most Recent Message ID
     select = cursor.execute("SELECT * FROM bot_service_messages WHERE chat_id = ? AND type = ?",(chat_id,"MostRecent"))
     row = select.fetchone()
@@ -1070,7 +1084,7 @@ def hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epi
         receiverHouse = hp_get_user_house(chat_id,most_recent_user_id)
     user_detail = activity_status_check(most_recent_user_id,chat_id,context)
 
-    if standard_or_epic == "Standard":
+    if character_type == "Standard":
         # Random STANDARD Characters
         if random_standard_char == 1:
             # Golden Snitch Game
@@ -1081,9 +1095,9 @@ def hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epi
             log_bot_message(messageinfo.message_id,chat_id,timestamp,172800,"Snitch","open")
         elif random_standard_char == 2:
             # Snape Unimpressed
-            current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"negative",-10,"from_admin",update,context,None,receiverHouse)
+            current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"negative",-20,"from_admin",update,context,None,receiverHouse)
             context.bot.send_sticker(chat_id, sticker=snape_file_id, reply_to_message_id=most_recent_message_id)
-            messageinfo = context.bot.send_message(chat_id, text="*Professor Snape is unimpressed!\n\n*He deducts 10 points from " + user_detail[1].user.mention_markdown() + "of " + receiverHouse + "\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
+            messageinfo = context.bot.send_message(chat_id, text="*Professor Snape is unimpressed!\n\n*He deducts 20 points from " + user_detail[1].user.mention_markdown() + "of " + receiverHouse + "\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
         elif random_standard_char == 3:
             # Trelawney
             # Get Random User ID for Trelawney because she's a bit weird
@@ -1092,19 +1106,19 @@ def hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epi
             if row:
                 random_user_id = row[0]
                 user_detail = activity_status_check(random_user_id,chat_id,context)
-            current_points = hp_allocate_points(chat_id,timestamp,random_user_id,term_id,"positive",10,"from_admin",update,context,None,receiverHouse)
+            current_points = hp_allocate_points(chat_id,timestamp,random_user_id,term_id,"positive",15,"from_admin",update,context,None,receiverHouse)
             context.bot.send_sticker(chat_id, sticker=trelawney_file_id)
-            messageinfo = context.bot.send_message(chat_id, text="*Sybill Trelawney sees ... points ... in someones future ... but she's not sure ... who!?*\n\nShe randomly gives " + user_detail[1].user.mention_markdown() + " of " + receiverHouse + " 10 points!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
+            messageinfo = context.bot.send_message(chat_id, text="*Sybill Trelawney sees ... points ... in someones future ... but she's not sure ... who!?*\n\nShe randomly gives " + user_detail[1].user.mention_markdown() + " of " + receiverHouse + " 15 points!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
         elif random_standard_char == 4:
             # Umbridge
-            current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"negative",-2,"from_admin",update,context,None,receiverHouse)
+            current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"negative",-10,"from_admin",update,context,None,receiverHouse)
             context.bot.send_sticker(chat_id, sticker=umbridge_file_id, reply_to_message_id=most_recent_message_id)
-            messageinfo = context.bot.send_message(chat_id, text="*Dolores Umbridge thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + "* is a Muggle-Born!*\n\nShe deducts 2 points from them!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
+            messageinfo = context.bot.send_message(chat_id, text="*Dolores Umbridge thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + "* is a Muggle-Born!*\n\nShe deducts 10 points from them!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
         elif random_standard_char == 5:
             # Slughorn
-            current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"positive",2,"from_admin",update,context,None,receiverHouse)
+            current_points = hp_allocate_points(chat_id,timestamp,most_recent_user_id,term_id,"positive",10,"from_admin",update,context,None,receiverHouse)
             context.bot.send_sticker(chat_id, sticker=slughorn_file_id, reply_to_message_id=most_recent_message_id)
-            messageinfo = context.bot.send_message(chat_id, text="*Professor Slughorn thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " *looks lucky today!*\n\nHe awards them 2 points!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
+            messageinfo = context.bot.send_message(chat_id, text="*Professor Slughorn thinks *" + user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " *looks lucky today!*\n\nHe awards them 10 points!\n\nTheir new total for the term is " + str(current_points), parse_mode='markdown')
         elif random_standard_char == 6:
             # Troll
             # Troll has wide area of effect, hits three people
@@ -1114,13 +1128,13 @@ def hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epi
             for row in rows:
                 user_id = row[0]
                 user_detail = activity_status_check(user_id,chat_id,context)
-                current_points = hp_allocate_points(chat_id,timestamp,user_id,term_id,"negative",-5,"from_admin",update,context,None,receiverHouse)
+                current_points = hp_allocate_points(chat_id,timestamp,user_id,term_id,"negative",-20,"from_admin",update,context,None,receiverHouse)
                 receiverHouse = hp_get_user_house(chat_id,user_id)
                 sentence = user_detail[1].user.mention_markdown() + "* of * " + receiverHouse + " (New Total: " + str(current_points) + ")"
                 userList.append(sentence)
             sentenceList = "\n".join(userList)
             context.bot.send_sticker(chat_id, sticker=troll_file_id)
-            messageinfo = context.bot.send_message(chat_id, text="*TROLLLL IN THE DUNGEON!*\n\nHe swings his club and hits the following for 5 points:\n\n" + sentenceList, parse_mode='markdown')
+            messageinfo = context.bot.send_message(chat_id, text="*TROLLLL IN THE DUNGEON!*\n\nHe swings his club and hits the following for 20 points:\n\n" + sentenceList, parse_mode='markdown')
         elif random_standard_char == 7:
             # Buckbeak
             # Troll has wide area of effect, hits three people
@@ -1137,7 +1151,7 @@ def hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epi
             sentenceList = "\n".join(userList)
             context.bot.send_sticker(chat_id, sticker=buckbeak_file_id)
             messageinfo = context.bot.send_message(chat_id, text="*Buckbeak has landed nearby!*\n\nApproaching carefully, the following are granted 5 points:\n\n" + sentenceList, parse_mode='markdown')
-    elif standard_or_epic == "Epic":
+    elif character_type == "Epic":
         if random_epic_char == 1:
             # Bellatrix
             #
@@ -1248,15 +1262,23 @@ def hp_random_character(chat_id,context,update,timestamp,term_id,standard_or_epi
                     messageinfo = context.bot.send_message(chat_id, text="*Harry Potter* has awarded " + user_detail[1].user.mention_markdown() + " of " + receiverHouse + " as the best performing pupil of the lowest scoring house, 75 House points!\n\nTheir new total is " + str(new_points), parse_mode='markdown')
                 elif house_elf_sacrifice == True:
                     messageinfo = context.bot.send_message(chat_id, text="*Harry Potter* almost awarded points to the House Elves as the lowest scoring House! However, in keeping with their manner they sacrificed themselves for the next lowest house - choosing " + user_detail[1].user.mention_markdown() + " of " + receiverHouse + " who has been granted 75 House points!", parse_mode='markdown')
+    elif character_type == "Guest":
+        if random_guest_char == 1:
+            # Deadpool V1 
+            # Nice and simple
+            context.bot.send_sticker(chat_id, sticker=deadpool_file_id)
+            messageinfo = context.bot.send_message(chat_id, text="*Deadpool wants your dick!*\n\nWell, that's just lazy character creation. Draw a dick pic and the best ... no wait ... the one with the best veins gets 20 House points!", parse_mode='markdown')
 
 def hp_character_appearance_counter(chat_id,update,context,term_id,timestamp) -> None:
     
     standard_character_count = int(get_counter(chat_id,"standard_character_counter"))
     epic_character_count = int(get_counter(chat_id,"epic_character_counter"))
+    guest_character_count = int(get_counter(chat_id,"guest_character_counter"))
 
     chat_config = get_chat_config(chat_id)
     standard_character_total = int(chat_config['standard_characters_frequency'][1])
     epic_character_total = int(chat_config['epic_characters_frequency'][1])
+    guest_character_total = int(chat_config['guest_characters_frequency'][1])
 
     if standard_character_count > standard_character_total:
         hp_character_appearance(chat_id,update,context,timestamp,term_id,False,"Standard")
@@ -1271,6 +1293,13 @@ def hp_character_appearance_counter(chat_id,update,context,term_id,timestamp) ->
     else: 
         epic_character_count += 1
         set_counter(chat_id,"epic_character_counter",epic_character_count)
+    
+    if guest_character_count > guest_character_total:
+        hp_character_appearance(chat_id,update,context,timestamp,term_id,False,"Guest")
+        set_counter(chat_id,"guest_character_counter",1)
+    else:
+        guest_character_count += 1
+        set_counter(chat_id,"guest_character_counter",guest_character_count)
 
 def hp_rules_checker(chat_id,context,user_id = None) -> None:
     time = datetime.now()
