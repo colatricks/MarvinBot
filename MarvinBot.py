@@ -1704,10 +1704,10 @@ def greet_chat_members(update: Update, context: CallbackContext) -> None:
         )
         messageinfo = context.bot.send_message(chat_id, text=welcome_message, parse_mode='markdown')
     elif was_member and not is_member:
-        update.effective_chat.send_message(
-            f"🚨 {member_name} is no longer in the group. 🚨\nRemoved by: {cause_name}",
-            parse_mode=ParseMode.HTML,
-        )
+        if {cause_name} == "invite link":
+            update.effective_chat.send_message(f"🚨 {member_name} is no longer in the group. 🚨\nThey left of their own accord.", parse_mode=ParseMode.HTML,)
+        else:
+            update.effective_chat.send_message(f"🚨 {member_name} is no longer in the group. 🚨\nRemoved by: {cause_name}", parse_mode=ParseMode.HTML,) 
 
 def get_counter(chat_id, counter_name):
     select = cursor.execute("SELECT * FROM counters WHERE chat_id = ? AND counter_name = ?",(chat_id,counter_name))
